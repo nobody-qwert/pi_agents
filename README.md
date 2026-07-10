@@ -130,60 +130,53 @@ The expected control flow is:
 
 ```mermaid
 graph TB
-    U["User request"] --> S0["Outer supervisor<br/>.pi/prompts/supervise.md"]
-    S0 --> B{"Is the task broad?"}
+    U["User request"] --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
 
-    B -->|Yes| H1(["Design request"])
+    S --> H1(["Broad task"])
     H1 --> DW["Design worker<br/>.pi/agents/design-worker.md"]
     DW --> H2(["Task decomposition"])
-    H2 --> S1["Supervisor<br/>Prepares implementation"]
-    B -->|No| S1
+    H2 --> S
 
-    S1 --> H3(["Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
+    S --> H3(["Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
     H3 --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
     CW --> H4(["Patch and worker report<br/>or STUCK status"])
-    H4 --> S2["Supervisor<br/>Inspects diff and runs acceptance commands"]
-    S2 --> V{"Verification result"}
+    H4 --> H5(["Supervisor inspects diff<br/>and runs acceptance commands"])
+    H5 --> S
 
-    V -->|Pass, low risk| O["Result returned to user<br/>Verified result or concrete blocker"]
+    S --> H6(["Verified risky patch"])
+    H6 --> R["Reviewer<br/>.pi/agents/reviewer.md"]
+    R --> H7(["Review verdict"])
+    H7 --> S
 
-    V -->|Pass, risky| H5(["Verified risky patch"])
-    H5 --> R["Reviewer<br/>.pi/agents/reviewer.md"]
-    R --> H6(["Review verdict"])
-    H6 --> S3["Supervisor<br/>Evaluates review"]
-    S3 --> O
+    S --> H8(["Worker stuck or checks failed<br/>Compact failure capsule"])
+    H8 --> D["Debugger<br/>.pi/agents/debugger.md"]
+    D --> H9(["Root-cause diagnosis"])
+    H9 --> S
 
-    V -->|Fail or stuck| H7(["Compact failure capsule"])
-    H7 --> D["Debugger<br/>.pi/agents/debugger.md"]
-    D --> H8(["Root-cause diagnosis"])
-    H8 --> S4["Supervisor<br/>Creates recovery task"]
-    S4 --> H9(["Revised task packet"])
-    H9 --> CW2["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
-    CW2 --> H10(["Replacement patch and report"])
-    H10 --> S5["Supervisor<br/>Reruns acceptance commands"]
-    S5 --> V2{"Replacement checks pass?"}
-    V2 -->|Yes| O
-    V2 -->|No, report blocker| O
+    S --> H10(["Revised task packet"])
+    H10 --> CW2["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
+    CW2 --> H11(["Replacement patch and report"])
+    H11 --> H12(["Supervisor reruns<br/>acceptance commands"])
+    H12 --> S
+
+    S --> H13(["Verified result or concrete blocker"])
+    H13 --> O["Result returned to user"]
 
     classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
     classDef handoff fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
-    classDef decision fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
     classDef input fill:#f3f4f6,color:#111827,stroke:#6b7280,stroke-width:1px
     classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
 
-    class S0,S1,S2,S3,S4,S5,DW,CW,R,D,CW2 agent
-    class H1,H2,H3,H4,H5,H6,H7,H8,H9,H10 handoff
-    class B,V,V2 decision
+    class S,DW,CW,R,D,CW2 agent
+    class H1,H2,H3,H4,H5,H6,H7,H8,H9,H10,H11,H12,H13 handoff
     class U input
     class O outcome
 ```
 
-Dark-blue boxes are model-driven agent roles. All supervisor phase boxes use
-`.pi/prompts/supervise.md`; specialized agents show their own definition files.
-Gray pill-shaped nodes are handoff notes or artifacts rather than agents. Amber
-diamonds are supervisor decisions, and green is the result returned to the
-user. The flow is intentionally unfolded instead of drawing loop-back arrows so
-Markdown renderers can space the branches without overlapping labels.
+Dark-blue boxes are model-driven agent roles and include their defining project
+file. Gray pills are connected handoff notes, supervisor actions, or artifacts;
+they are not separate agents. Gray is user input and green is the result
+returned to the user.
 
 Subagent calls should use project scope, a fresh context, and foreground
 execution. The supplied supervisor prompt enforces that policy at the
