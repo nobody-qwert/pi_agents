@@ -132,36 +132,30 @@ The expected control flow is:
 graph TB
     U["User request"] --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
     S -->|Broad task| DW["Design worker<br/>.pi/agents/design-worker.md"]
-    S -->|Narrow task| P["Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"]
-    DW --> P
-    P --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
-    CW --> C["Scoped code changes"]
-    C --> V["Independent verification<br/>Acceptance commands"]
-    V -->|Pass, risky change| R["Reviewer<br/>.pi/agents/reviewer.md"]
-    V -->|Pass, low risk| S
-    R --> S
-    CW -->|Stuck| F["Failure capsule"]
-    V -->|Fail| F
-    F --> D["Debugger<br/>.pi/agents/debugger.md"]
-    D --> P2["Revised task packet"]
-    P2 --> CW2["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
-    CW2 --> C
-    S --> O["Verified result or concrete blocker"]
+    DW -->|Task decomposition| S
+    S -->|Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md| CW["Coding worker<br/>.pi/agents/coding-worker.md"]
+    CW -->|Patch and worker report<br/>Supervisor inspects the diff and runs acceptance commands| S
+    S -->|Verified risky patch| R["Reviewer<br/>.pi/agents/reviewer.md"]
+    R -->|Review verdict| S
+    S -->|Worker stuck or checks failed<br/>Compact failure capsule| D["Debugger<br/>.pi/agents/debugger.md"]
+    D -->|Root-cause diagnosis| S
+    S -->|Revised task packet| CW2["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
+    CW2 -->|Replacement patch and report<br/>Supervisor reruns acceptance commands| S
+    S -->|Verified result or concrete blocker| O["Result returned to user"]
 
     classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
     classDef artifact fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
-    classDef verifier fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
     classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
 
     class S,DW,CW,R,D,CW2 agent
-    class U,P,C,F,P2 artifact
-    class V verifier
+    class U artifact
     class O outcome
 ```
 
-Blue boxes are model-driven agent roles and include their defining project file.
-Gray boxes are inputs or workflow artifacts, amber is deterministic
-verification, and green is the final outcome.
+Dark-blue boxes are model-driven agent roles and include their defining project
+file. Connector labels describe supervisor actions, handoff artifacts, and
+return values; they are not separate agents. Gray is user input and green is
+the result returned to the user.
 
 Subagent calls should use project scope, a fresh context, and foreground
 execution. The supplied supervisor prompt enforces that policy at the
