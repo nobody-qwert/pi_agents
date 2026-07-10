@@ -128,14 +128,40 @@ Then delegate a task with:
 
 The expected control flow is:
 
-```text
-user request
-  -> supervisor creates a narrow task packet
-  -> fresh coding worker implements the task
-  -> supervisor independently verifies the patch
-  -> reviewer checks risky changes
-  -> debugger investigates repeated failures in a fresh context
+```mermaid
+graph TB
+    U["User request"] --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
+    S -->|Broad task| DW["Design worker<br/>.pi/agents/design-worker.md"]
+    S -->|Narrow task| P["Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"]
+    DW --> P
+    P --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
+    CW --> C["Scoped code changes"]
+    C --> V["Independent verification<br/>Acceptance commands"]
+    V -->|Pass, risky change| R["Reviewer<br/>.pi/agents/reviewer.md"]
+    V -->|Pass, low risk| S
+    R --> S
+    CW -->|Stuck| F["Failure capsule"]
+    V -->|Fail| F
+    F --> D["Debugger<br/>.pi/agents/debugger.md"]
+    D --> P2["Revised task packet"]
+    P2 --> CW2["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
+    CW2 --> C
+    S --> O["Verified result or concrete blocker"]
+
+    classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
+    classDef artifact fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
+    classDef verifier fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
+    classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
+
+    class S,DW,CW,R,D,CW2 agent
+    class U,P,C,F,P2 artifact
+    class V verifier
+    class O outcome
 ```
+
+Blue boxes are model-driven agent roles and include their defining project file.
+Gray boxes are inputs or workflow artifacts, amber is deterministic
+verification, and green is the final outcome.
 
 Subagent calls should use project scope, a fresh context, and foreground
 execution. The supplied supervisor prompt enforces that policy at the
