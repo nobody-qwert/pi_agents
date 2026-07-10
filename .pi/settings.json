@@ -1,0 +1,21 @@
+{
+  "subagents": {
+    "defaultModel": "lmstudio/qwen3.6-27b@q4_k_m",
+    "modelScope": {
+      "enforce": true,
+      "allow": [
+        "lmstudio/qwen3.6-27b@q4_k_m"
+      ]
+    },
+    "globalConcurrencyLimit": 1,
+    "parallel": {
+      "maxTasks": 1,
+      "concurrency": 1
+    },
+    "maxSubagentSpawnsPerSession": 12,
+    "forceTopLevelAsync": false,
+    "scheduledRuns": {
+      "enabled": false
+    }
+  }
+}
