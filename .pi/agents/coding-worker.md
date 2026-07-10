@@ -1,7 +1,6 @@
 ---
 name: coding-worker
 description: Implements one narrow coding task in a fresh context and stops on repeated failure
-model: lmstudio/qwen3.6-27b@q4_k_m
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false

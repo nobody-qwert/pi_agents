@@ -2,7 +2,6 @@
 name: design-worker
 description: Decomposes a complex coding request into module-sized task contracts without editing files
 tools: read, grep, find, ls
-model: lmstudio/qwen3.6-27b@q4_k_m
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false

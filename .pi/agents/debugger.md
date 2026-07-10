@@ -2,7 +2,6 @@
 name: debugger
 description: Diagnoses a stuck coding attempt from a compact failure capsule without editing files
 tools: read, grep, find, ls, bash
-model: lmstudio/qwen3.6-27b@q4_k_m
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false

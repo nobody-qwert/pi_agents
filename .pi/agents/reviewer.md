@@ -2,7 +2,6 @@
 name: reviewer
 description: Reviews a completed patch against its task contract and verification evidence without editing
 tools: read, grep, find, ls, bash
-model: lmstudio/qwen3.6-27b@q4_k_m
 systemPromptMode: replace
 inheritProjectContext: true
 inheritSkills: false
