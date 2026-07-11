@@ -11,8 +11,9 @@ runtime is provided separately by
 
 ## What this repository provides
 
-- A `/supervise` prompt for task decomposition, delegation, and verification.
-- Separate worker roles for implementation, debugging, design, and review.
+- A `/supervise` prompt for status-based orchestration and verification.
+- Separate roles for investigation, architectural design, implementation,
+  debugging, and review.
 - A compact task-packet template for reproducible handoffs.
 - Shared repository rules for scope control, modularity, and test discipline.
 - Sequential execution settings for environments where all agents share one
@@ -30,6 +31,7 @@ runtime is provided separately by
     │   ├── coding-worker.md
     │   ├── debugger.md
     │   ├── design-worker.md
+    │   ├── investigator.md
     │   └── reviewer.md
     ├── prompts/
     │   └── supervise.md
@@ -42,7 +44,8 @@ runtime is provided separately by
 | `.pi/prompts/supervise.md` | Outer-supervisor workflow exposed as `/supervise` |
 | `.pi/agents/coding-worker.md` | Implements one narrow task in a fresh context |
 | `.pi/agents/debugger.md` | Diagnoses a failed attempt without editing files |
-| `.pi/agents/design-worker.md` | Splits broad work into module-sized task packets |
+| `.pi/agents/investigator.md` | Maps current behavior and returns a routing status and task packets |
+| `.pi/agents/design-worker.md` | Resolves architectural decisions identified by investigation |
 | `.pi/agents/reviewer.md` | Reviews a completed patch independently |
 | `.pi/TASK_PACKET_TEMPLATE.md` | Schema for bounded worker handoffs |
 | `.pi/settings.json` | Model allowlist and subagent concurrency limits |
@@ -132,10 +135,14 @@ The expected control flow is:
 graph TB
     U["User request"] --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
 
-    S --> H1(["Broad task"])
-    H1 --> DW["Design worker<br/>.pi/agents/design-worker.md"]
-    DW --> H2(["Task decomposition"])
-    H2 --> S
+    S --> I["Investigator<br/>.pi/agents/investigator.md"]
+    I --> H1(["Status, evidence, and task packets"])
+    H1 --> S
+
+    S --> H2(["NEEDS_DESIGN"])
+    H2 --> DW["Design worker<br/>.pi/agents/design-worker.md"]
+    DW --> H2B(["Design decision and task packets"])
+    H2B --> S
 
     S --> H3(["Lean task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
     H3 --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
@@ -167,8 +174,8 @@ graph TB
     classDef input fill:#f3f4f6,color:#111827,stroke:#6b7280,stroke-width:1px
     classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
 
-    class S,DW,CW,R,D,CW2 agent
-    class H1,H2,H3,H4,H5,H6,H7,H8,H9,H10,H11,H12,H13 handoff
+    class S,I,DW,CW,R,D,CW2 agent
+    class H1,H2,H2B,H3,H4,H5,H6,H7,H8,H9,H10,H11,H12,H13 handoff
     class U input
     class O outcome
 ```
@@ -216,7 +223,8 @@ contexts.
 
 - Existing uncommitted changes are treated as human-owned.
 - Workers may not weaken tests or broaden their allowed paths to claim success.
-- Read-only design, debugging, and review roles are separated from implementation.
+- Read-only investigation, design, debugging, and review roles are separated
+  from implementation and from supervisor orchestration.
 - Parallel, background, scheduled, and nested subagents are disabled by policy.
 - Markdown instructions guide agent behavior but cannot provide hard process or
   filesystem isolation.
