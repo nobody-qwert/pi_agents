@@ -1,6 +1,6 @@
 # Lean Task Packet
 
-This file is a template for the supervisor or extension. It is not automatically added to model context.
+This template defines the handoff contract for delegated tasks.
 
 ```text
 TASK_ID: <stable short id>
@@ -11,11 +11,14 @@ GOAL:
 ACCEPTANCE_CRITERIA:
 - <behavior that can be checked>
 
-ALLOWED_PATHS:
+EXPECTED_PATHS:
 - <path>
 
+PROTECTED_PATHS:
+- <path that must not change, or none>
+
 ENTRY_SYMBOLS:
-- <symbol or starting file>
+- <verified symbol or starting file>
 
 ACCEPTANCE_COMMANDS:
 - <exact bounded command>
@@ -32,4 +35,3 @@ KNOWN_FAILED_APPROACHES:
 OUTPUT_CONTRACT:
 Return status, concise summary, files changed, checks, remaining risk, and a failure fingerprint when incomplete.
 ```
-

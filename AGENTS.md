@@ -14,13 +14,15 @@ These rules apply to every pi process working in this repository.
 
 ## Modularity
 
+- Keep implementations modular and maintainable through clear responsibilities, explicit boundaries, and minimal coupling.
 - Give each module one clear responsibility.
 - Extend an existing appropriate module before creating a new abstraction.
 - Keep policy separate from I/O and framework adapters.
 - Put reusable logic behind a small explicit interface.
 - Avoid hidden global state and circular dependencies.
 - Add focused tests beside or near the behavior they verify.
-- If a task crosses several responsibilities, stop and propose smaller task slices.
+- Keep each delegated task to one observable outcome owned by one responsibility and one independent verification boundary.
+- If a task crosses several responsibilities or contains independently useful outcomes, stop and propose smaller task slices.
 
 ## Verification
 
@@ -34,7 +36,7 @@ These rules apply to every pi process working in this repository.
 
 - Do not retry an unchanged command after the same failure without a new evidence-based hypothesis.
 - If the same normalized error survives two distinct fixes, stop and report `STUCK`.
-- If required work lies outside the allowed paths or task contract, stop and report `BLOCKED_SCOPE`.
+- Treat expected paths as starting points. If required work changes the observable outcome or a protected path, stop and report `BLOCKED_SCOPE`.
 - Keep reports concise. Point to files and logs instead of pasting large output.
 
 ## Local subagent execution boundary

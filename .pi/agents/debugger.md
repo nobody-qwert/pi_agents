@@ -18,7 +18,7 @@ Your job is to find new evidence, not continue the previous worker's preferred t
 
 1. Reproduce the named failure once if the command is safe and bounded.
 2. Inspect only the relevant implementation, tests, interfaces, and recent diff.
-3. List the previous hypotheses and explicitly challenge each one.
+3. Challenge each previous hypothesis against the available evidence.
 4. Identify the earliest incorrect assumption or violated invariant.
 5. Recommend one narrow next experiment for a new coding worker.
 
@@ -33,6 +33,7 @@ EVIDENCE:
 - path, symbol, command, or error
 DISPROVED_APPROACHES:
 - short fingerprint and why it failed
-NEXT_EXPERIMENT: one bounded change or observation
+MISSING_EVIDENCE: exact missing observation, or none
+NEXT_EXPERIMENT: one evidence-backed bounded change or observation, or none
 REQUIRED_PATHS: smallest path list for the next worker
 ```
