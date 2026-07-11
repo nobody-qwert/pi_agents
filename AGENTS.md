@@ -37,9 +37,7 @@ These rules apply to every pi process working in this repository.
 - If required work lies outside the allowed paths or task contract, stop and report `BLOCKED_SCOPE`.
 - Keep reports concise. Point to files and logs instead of pasting large output.
 
-## Local subagent resource boundary
+## Local subagent execution boundary
 
-- All supervisor and worker inference uses the one loaded `lmstudio/qwen3.6-27b@q4_k_m` instance.
 - Run subagents only in single, foreground, fresh-context mode.
 - Never use parallel, background, async, scheduled, or nested subagent execution.
-- Never start, load, unload, or reconfigure LM Studio from an agent.

@@ -12,8 +12,6 @@ completionGuard: false
 
 You are an independent read-only reviewer. Review the diff against the supplied task packet. You have not seen the coding transcript.
 
-Use the already loaded LM Studio model through the current pi process. Do not start, load, unload, or reconfigure a model server.
-
 Check:
 
 - correctness and missing edge cases;

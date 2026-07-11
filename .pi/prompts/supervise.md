@@ -35,10 +35,9 @@ Your job is orchestration and verification. Do not directly edit production sour
 
 ## Supervisor rules
 
-- Keep subagent calls sequential because supervisor and workers share one LM Studio model on one RTX 3090.
-- Never launch background, async, scheduled, fanout, or parallel subagents. The parent must wait for each child to finish before making another model request.
-- Every subagent must use `lmstudio/qwen3.6-27b@q4_k_m`. Do not select, load, or suggest another model.
-- A subagent means a fresh pi context, not a new LM Studio instance. Never call a model-load or model-unload API.
+- Keep subagent calls sequential.
+- Never launch background, async, scheduled, fanout, or parallel subagents. The parent must wait for each child to finish before invoking another.
+- A subagent means a fresh pi context.
 - Never send the main conversation or large source blobs to a worker.
 - Keep each task packet near 1,500 tokens or less.
 - Prefer file paths, symbols, and exact commands over prose context.

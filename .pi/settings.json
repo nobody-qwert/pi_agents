@@ -1,12 +1,5 @@
 {
   "subagents": {
-    "defaultModel": "lmstudio/qwen3.6-27b-mtp",
-    "modelScope": {
-      "enforce": true,
-      "allow": [
-        "lmstudio/qwen3.6-27b-mtp"
-      ]
-    },
     "globalConcurrencyLimit": 1,
     "parallel": {
       "maxTasks": 1,
