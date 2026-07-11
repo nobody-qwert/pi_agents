@@ -20,6 +20,9 @@ PROTECTED_PATHS:
 ENTRY_SYMBOLS:
 - <verified symbol or starting file>
 
+DEPENDS_ON:
+- <task id whose verified outcome is required first, or none>
+
 ACCEPTANCE_COMMANDS:
 - <exact bounded command>
 
@@ -33,5 +36,5 @@ KNOWN_FAILED_APPROACHES:
 - <short fingerprint only, or none>
 
 OUTPUT_CONTRACT:
-Return status, concise summary, files changed, checks, remaining risk, and a failure fingerprint when incomplete.
+Return status, concise summary, files changed, checks, remaining risk, and a failure fingerprint plus next recommendation when incomplete.
 ```

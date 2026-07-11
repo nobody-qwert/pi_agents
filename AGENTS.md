@@ -21,8 +21,8 @@ These rules apply to every pi process working in this repository.
 - Put reusable logic behind a small explicit interface.
 - Avoid hidden global state and circular dependencies.
 - Add focused tests beside or near the behavior they verify.
-- Keep each delegated task to one observable outcome owned by one responsibility and one independent verification boundary.
-- If a task crosses several responsibilities or contains independently useful outcomes, stop and propose smaller task slices.
+- Keep each delegated implementation task to one observable outcome owned by one responsibility and one independent verification boundary.
+- Supervisors and design workers must split requests that cross responsibilities or contain independently useful outcomes before delegating implementation. Implementation workers must return `BLOCKED_SCOPE` rather than broaden their assigned outcome.
 
 ## Verification
 
