@@ -1,0 +1,226 @@
+{
+  "event_envelope": {
+    "schema_version": 1,
+    "event_id": "evt_0001",
+    "run_id": "run_0001",
+    "conversation_id": "conv_0001",
+    "sequence": 42,
+    "occurred_at": "2026-07-16T11:00:00+03:00",
+    "type": "agent.completed",
+    "stage": "DESIGN",
+    "node_id": "design-authority",
+    "work_node_id": null,
+    "attempt_id": "attempt_0001",
+    "status": "completed",
+    "summary": "Design proposal produced",
+    "detail_ref": "/api/v1/runs/run_0001/events/evt_0001/detail",
+    "trace_id": "0123456789abcdef0123456789abcdef",
+    "span_id": "0123456789abcdef"
+  },
+  "approval_record": {
+    "schema_version": 1,
+    "metadata": {
+      "schema_version": 1,
+      "record_version": 3,
+      "created_at": "2026-07-16T08:00:00Z",
+      "updated_at": "2026-07-16T08:01:00Z",
+      "idempotency_key": "approval:run_0001:3",
+      "trace_id": "0123456789abcdef0123456789abcdef"
+    },
+    "kind": "approval_record",
+    "approval_id": "approval_0001",
+    "run_id": "run_0001",
+    "approver": {
+      "schema_version": 1,
+      "actor_id": "user_operator-1",
+      "kind": "human",
+      "role": "operator",
+      "authenticated_at": "2026-07-16T08:00:30Z",
+      "authentication_context": "local-session"
+    },
+    "authority": {
+      "schema_version": 1,
+      "scope": "design",
+      "source": "authenticated operator action",
+      "granted_at": "2026-07-16T08:00:30Z"
+    },
+    "decision": "approved",
+    "decided_at": "2026-07-16T08:01:00Z",
+    "affected_record_version": 2,
+    "comment": "Design baseline reviewed"
+  },
+  "packet_record": {
+    "schema_version": 1,
+    "metadata": {
+      "schema_version": 1,
+      "record_version": 1,
+      "created_at": "2026-07-16T08:02:00Z",
+      "updated_at": "2026-07-16T08:02:00Z",
+      "idempotency_key": "packet:run_0001:task_schema",
+      "trace_id": "0123456789abcdef0123456789abcdef"
+    },
+    "kind": "packet_record",
+    "packet_id": "pkt_schema",
+    "run_id": "run_0001",
+    "task_id": "task_schema",
+    "work_node_id": "wn_schema",
+    "task_type": "LEAF_TASK",
+    "goal": "Define strict domain schema primitives",
+    "design_baseline": [
+      {
+        "schema_version": 1,
+        "design_version": 1,
+        "section": "PLAN 6",
+        "decision_ids": []
+      }
+    ],
+    "acceptance_criteria": [
+      {
+        "schema_version": 1,
+        "criterion_id": "criterion_schema_tests",
+        "observable_result": "The strict domain schema suite passes"
+      }
+    ],
+    "input_artifacts": [],
+    "output_artifacts": [
+      {
+        "schema_version": 1,
+        "artifact_id": "art_schema_report",
+        "path": "backend/schema-report.json",
+        "required_form": "Deterministic JSON schema report"
+      }
+    ],
+    "interfaces": ["Pydantic v2 strict model boundary"],
+    "starting_points": ["backend/src/orchestrator/domain"],
+    "depends_on": [],
+    "expected_touch_points": ["backend/src/orchestrator/domain"],
+    "protected_touch_points": ["scripts/run-work-packets.sh"],
+    "acceptance_checks": [
+      {
+        "schema_version": 1,
+        "method": "command",
+        "procedure": "uv run pytest tests/unit/domain/test_schema_boundaries.py",
+        "evidence": "Passing pytest result"
+      }
+    ],
+    "authority_limits": ["Do not add transition policy"],
+    "known_facts": ["Unknown fields must be rejected"],
+    "known_failed_approaches": [],
+    "issue_contract": {
+      "schema_version": 1,
+      "report_evidence": "Report observed evidence with each proposed classification",
+      "proposed_classifications": [
+        "LOCAL_DEFECT",
+        "INTERFACE_MISMATCH",
+        "DESIGN_GAP",
+        "REQUIREMENT_GAP",
+        "EVIDENCE_GAP",
+        "ENVIRONMENT_BLOCKER"
+      ],
+      "redesign_in_place_allowed": false
+    },
+    "output_contract": {
+      "schema_version": 1,
+      "status": "Report completed or blocked",
+      "outputs": "List produced artifact IDs and paths",
+      "checks": "List checks and their results",
+      "risks": "List unresolved risks or state none",
+      "issues": "List issues under the issue contract or state none",
+      "design_version_used": 1
+    }
+  },
+  "proposed_work_plan": {
+    "schema_version": 1,
+    "kind": "proposed_work_plan",
+    "context": {
+      "schema_version": 1,
+      "proposal_id": "proposal_0001",
+      "run_id": "run_0001",
+      "work_node_id": "wn_outcome",
+      "attempt_id": "attempt_0001",
+      "submitted_at": "2026-07-16T08:02:00Z",
+      "producer": {
+        "schema_version": 1,
+        "actor_id": "agent_planner-1",
+        "kind": "agent",
+        "role": "work-planner"
+      },
+      "design_version": 1
+    },
+    "root_work_node_id": "wn_outcome",
+    "nodes": [
+      {
+        "schema_version": 1,
+        "work_node_id": "wn_outcome",
+        "parent_id": null,
+        "node_type": "OUTCOME",
+        "goal": "Deliver the accepted outcome",
+        "owner_role": "coordinator",
+        "design_refs": [
+          {
+            "schema_version": 1,
+            "design_version": 1,
+            "section": "4.2",
+            "decision_ids": []
+          }
+        ],
+        "depends_on": [],
+        "inputs": [],
+        "expected_outputs": ["accepted outcome"],
+        "interfaces": [],
+        "acceptance_criterion_ids": ["criterion_outcome"]
+      }
+    ]
+  },
+  "transition_proposal": {
+    "schema_version": 1,
+    "kind": "transition_proposal",
+    "context": {
+      "schema_version": 1,
+      "proposal_id": "proposal_transition",
+      "run_id": "run_0001",
+      "work_node_id": "wn_outcome",
+      "attempt_id": "attempt_transition",
+      "submitted_at": "2026-07-16T08:03:00Z",
+      "producer": {
+        "schema_version": 1,
+        "actor_id": "agent_coordinator",
+        "kind": "agent",
+        "role": "coordinator"
+      },
+      "design_version": 1
+    },
+    "requested_next_state": "VERIFIED",
+    "rationale": "Verification evidence is ready for deterministic evaluation"
+  },
+  "transition_record": {
+    "schema_version": 1,
+    "metadata": {
+      "schema_version": 1,
+      "record_version": 2,
+      "created_at": "2026-07-16T08:04:00Z",
+      "updated_at": "2026-07-16T08:04:00Z",
+      "idempotency_key": "transition:run_0001:wn_outcome:2",
+      "trace_id": "0123456789abcdef0123456789abcdef"
+    },
+    "kind": "transition_record",
+    "transition_id": "transition_0001",
+    "run_id": "run_0001",
+    "work_node_id": "wn_outcome",
+    "previous_state": "INTEGRATED",
+    "next_state": "VERIFIED",
+    "reason": "Independent outcome evidence passed",
+    "actor": {
+      "schema_version": 1,
+      "actor_id": "service_transition",
+      "kind": "service",
+      "role": "transition-service"
+    },
+    "previous_record_version": 1,
+    "next_record_version": 2
+  },
+  "git_object_hashes": [
+    "0123456789abcdef0123456789abcdef01234567",
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  ]
+}

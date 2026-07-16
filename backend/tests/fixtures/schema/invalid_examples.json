@@ -1,0 +1,366 @@
+[
+  {
+    "name": "legacy unstructured packet contract",
+    "model": "packet_record",
+    "payload": {
+      "schema_version": 1,
+      "metadata": {
+        "schema_version": 1,
+        "record_version": 1,
+        "created_at": "2026-07-16T08:02:00Z",
+        "updated_at": "2026-07-16T08:02:00Z"
+      },
+      "kind": "packet_record",
+      "packet_id": "pkt_schema",
+      "run_id": "run_0001",
+      "task_id": "task_schema",
+      "work_node_id": "wn_schema",
+      "task_type": "LEAF_TASK",
+      "goal": "Define strict domain schema primitives",
+      "design_baseline": [],
+      "acceptance_criterion_ids": ["criterion_schema_tests"],
+      "input_artifacts": [],
+      "output_artifacts": ["schema report"],
+      "interfaces": [],
+      "starting_points": [],
+      "depends_on": [],
+      "expected_touch_points": [],
+      "protected_touch_points": [],
+      "acceptance_checks": [],
+      "authority_limits": [],
+      "known_facts": [],
+      "known_failed_approaches": []
+    }
+  },
+  {
+    "name": "output artifact without identity",
+    "model": "packet_record",
+    "payload": {
+      "schema_version": 1,
+      "metadata": {
+        "schema_version": 1,
+        "record_version": 1,
+        "created_at": "2026-07-16T08:02:00Z",
+        "updated_at": "2026-07-16T08:02:00Z"
+      },
+      "kind": "packet_record",
+      "packet_id": "pkt_schema",
+      "run_id": "run_0001",
+      "task_id": "task_schema",
+      "work_node_id": "wn_schema",
+      "task_type": "LEAF_TASK",
+      "goal": "Define strict domain schema primitives",
+      "design_baseline": [],
+      "acceptance_criteria": [
+        {
+          "schema_version": 1,
+          "criterion_id": "criterion_schema_tests",
+          "observable_result": "Schema tests pass"
+        }
+      ],
+      "input_artifacts": [],
+      "output_artifacts": [
+        {
+          "schema_version": 1,
+          "required_form": "JSON"
+        }
+      ],
+      "interfaces": [],
+      "starting_points": [],
+      "depends_on": [],
+      "expected_touch_points": [],
+      "protected_touch_points": [],
+      "acceptance_checks": [],
+      "authority_limits": [],
+      "known_facts": [],
+      "known_failed_approaches": [],
+      "issue_contract": {
+        "schema_version": 1,
+        "report_evidence": "Report evidence",
+        "proposed_classifications": ["LOCAL_DEFECT"],
+        "redesign_in_place_allowed": false
+      },
+      "output_contract": {
+        "schema_version": 1,
+        "status": "Report status",
+        "outputs": "Report outputs",
+        "checks": "Report checks",
+        "risks": "Report risks",
+        "issues": "Report issues",
+        "design_version_used": 1
+      }
+    }
+  },
+  {
+    "name": "unknown field",
+    "model": "event_envelope",
+    "payload": {
+      "schema_version": 1,
+      "event_id": "evt_0001",
+      "run_id": "run_0001",
+      "conversation_id": "conv_0001",
+      "sequence": 1,
+      "occurred_at": "2026-07-16T08:00:00Z",
+      "type": "run.created",
+      "stage": "INTAKE",
+      "node_id": "intake",
+      "status": "created",
+      "summary": "Run created",
+      "trace_id": "0123456789abcdef0123456789abcdef",
+      "span_id": "0123456789abcdef",
+      "unexpected": true
+    }
+  },
+  {
+    "name": "invalid run ID",
+    "model": "event_envelope",
+    "payload": {
+      "schema_version": 1,
+      "event_id": "evt_0001",
+      "run_id": "not-a-run-id",
+      "conversation_id": "conv_0001",
+      "sequence": 1,
+      "occurred_at": "2026-07-16T08:00:00Z",
+      "type": "run.created",
+      "stage": "INTAKE",
+      "node_id": "intake",
+      "status": "created",
+      "summary": "Run created",
+      "trace_id": "0123456789abcdef0123456789abcdef",
+      "span_id": "0123456789abcdef"
+    }
+  },
+  {
+    "name": "invalid status",
+    "model": "event_envelope",
+    "payload": {
+      "schema_version": 1,
+      "event_id": "evt_0001",
+      "run_id": "run_0001",
+      "conversation_id": "conv_0001",
+      "sequence": 1,
+      "occurred_at": "2026-07-16T08:00:00Z",
+      "type": "run.created",
+      "stage": "INTAKE",
+      "node_id": "intake",
+      "status": "done",
+      "summary": "Run created",
+      "trace_id": "0123456789abcdef0123456789abcdef",
+      "span_id": "0123456789abcdef"
+    }
+  },
+  {
+    "name": "unsupported schema version",
+    "model": "event_envelope",
+    "payload": {
+      "schema_version": 2,
+      "event_id": "evt_0001",
+      "run_id": "run_0001",
+      "conversation_id": "conv_0001",
+      "sequence": 1,
+      "occurred_at": "2026-07-16T08:00:00Z",
+      "type": "run.created",
+      "stage": "INTAKE",
+      "node_id": "intake",
+      "status": "created",
+      "summary": "Run created",
+      "trace_id": "0123456789abcdef0123456789abcdef",
+      "span_id": "0123456789abcdef"
+    }
+  },
+  {
+    "name": "coerced schema version",
+    "model": "event_envelope",
+    "payload": {
+      "schema_version": "1",
+      "event_id": "evt_0001",
+      "run_id": "run_0001",
+      "conversation_id": "conv_0001",
+      "sequence": 1,
+      "occurred_at": "2026-07-16T08:00:00Z",
+      "type": "run.created",
+      "stage": "INTAKE",
+      "node_id": "intake",
+      "status": "created",
+      "summary": "Run created",
+      "trace_id": "0123456789abcdef0123456789abcdef",
+      "span_id": "0123456789abcdef"
+    }
+  },
+  {
+    "name": "zero record version",
+    "model": "approval_record",
+    "payload": {
+      "schema_version": 1,
+      "metadata": {
+        "schema_version": 1,
+        "record_version": 0,
+        "created_at": "2026-07-16T08:00:00Z",
+        "updated_at": "2026-07-16T08:01:00Z"
+      },
+      "kind": "approval_record",
+      "approval_id": "approval_0001",
+      "run_id": "run_0001",
+      "approver": {
+        "schema_version": 1,
+        "actor_id": "user_operator-1",
+        "kind": "human",
+        "role": "operator",
+        "authenticated_at": "2026-07-16T08:00:30Z",
+        "authentication_context": "local-session"
+      },
+      "authority": {
+        "schema_version": 1,
+        "scope": "design",
+        "source": "authenticated operator action",
+        "granted_at": "2026-07-16T08:00:30Z"
+      },
+      "decision": "approved",
+      "decided_at": "2026-07-16T08:01:00Z",
+      "affected_record_version": 2
+    }
+  },
+  {
+    "name": "transition proposal with unknown requested state",
+    "model": "transition_proposal",
+    "payload": {
+      "schema_version": 1,
+      "kind": "transition_proposal",
+      "context": {
+        "schema_version": 1,
+        "proposal_id": "proposal_transition",
+        "run_id": "run_0001",
+        "work_node_id": "wn_outcome",
+        "attempt_id": "attempt_transition",
+        "submitted_at": "2026-07-16T08:03:00Z",
+        "producer": {
+          "schema_version": 1,
+          "actor_id": "agent_coordinator",
+          "kind": "agent",
+          "role": "coordinator"
+        },
+        "design_version": 1
+      },
+      "requested_next_state": "NOT_A_REAL_STATE",
+      "rationale": "This state is outside the closed vocabulary"
+    }
+  },
+  {
+    "name": "transition record with unknown previous state",
+    "model": "transition_record",
+    "payload": {
+      "schema_version": 1,
+      "metadata": {
+        "schema_version": 1,
+        "record_version": 2,
+        "created_at": "2026-07-16T08:04:00Z",
+        "updated_at": "2026-07-16T08:04:00Z"
+      },
+      "kind": "transition_record",
+      "transition_id": "transition_bad_previous",
+      "run_id": "run_0001",
+      "work_node_id": "wn_outcome",
+      "previous_state": "NOT_A_REAL_STATE",
+      "next_state": "VERIFIED",
+      "reason": "Invalid previous state",
+      "actor": {
+        "schema_version": 1,
+        "actor_id": "service_transition",
+        "kind": "service",
+        "role": "transition-service"
+      },
+      "previous_record_version": 1,
+      "next_record_version": 2
+    }
+  },
+  {
+    "name": "transition record with unknown next state",
+    "model": "transition_record",
+    "payload": {
+      "schema_version": 1,
+      "metadata": {
+        "schema_version": 1,
+        "record_version": 2,
+        "created_at": "2026-07-16T08:04:00Z",
+        "updated_at": "2026-07-16T08:04:00Z"
+      },
+      "kind": "transition_record",
+      "transition_id": "transition_bad_next",
+      "run_id": "run_0001",
+      "work_node_id": "wn_outcome",
+      "previous_state": "INTEGRATED",
+      "next_state": "NOT_A_REAL_STATE",
+      "reason": "Invalid next state",
+      "actor": {
+        "schema_version": 1,
+        "actor_id": "service_transition",
+        "kind": "service",
+        "role": "transition-service"
+      },
+      "previous_record_version": 1,
+      "next_record_version": 2
+    }
+  },
+  {
+    "name": "39-character Git object hash",
+    "model": "git_object_hash",
+    "payload": "0123456789abcdef0123456789abcdef0123456"
+  },
+  {
+    "name": "41-character Git object hash",
+    "model": "git_object_hash",
+    "payload": "0123456789abcdef0123456789abcdef012345678"
+  },
+  {
+    "name": "63-character Git object hash",
+    "model": "git_object_hash",
+    "payload": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde"
+  },
+  {
+    "name": "65-character Git object hash",
+    "model": "git_object_hash",
+    "payload": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+  },
+  {
+    "name": "agent actor with user identity namespace",
+    "model": "agent_actor",
+    "payload": {
+      "schema_version": 1,
+      "actor_id": "user_operator",
+      "kind": "agent",
+      "role": "planner"
+    }
+  },
+  {
+    "name": "authenticated human with agent identity namespace",
+    "model": "authenticated_actor",
+    "payload": {
+      "schema_version": 1,
+      "actor_id": "agent_planner",
+      "kind": "human",
+      "role": "operator",
+      "authenticated_at": "2026-07-16T08:00:00Z",
+      "authentication_context": "local-session"
+    }
+  },
+  {
+    "name": "system actor with service identity namespace",
+    "model": "actor_ref",
+    "payload": {
+      "schema_version": 1,
+      "actor_id": "service_scheduler",
+      "kind": "system",
+      "role": "scheduler"
+    }
+  },
+  {
+    "name": "service actor with system identity namespace",
+    "model": "actor_ref",
+    "payload": {
+      "schema_version": 1,
+      "actor_id": "system_runtime",
+      "kind": "service",
+      "role": "runtime"
+    }
+  }
+]
