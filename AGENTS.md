@@ -24,6 +24,8 @@
 - Avoid hidden global state and circular dependencies.
 - Add focused tests beside or near the behavior they verify.
 - Keep prompts and agent configuration versioned separately from runtime code.
+- Use LM Studio with the configured `qwen3.6-27b` model for runnable and
+  end-to-end flows; do not add a fake-model runtime or silent provider fallback.
 
 ## Verification
 

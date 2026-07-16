@@ -701,7 +701,7 @@ Changes:
 - implement the fixed LangGraph control graph, durable checkpointer, state
   repository, artifact repository, and authenticated approval boundary;
 - implement transition guards, idempotency keys, retry/budget policies, and a
-  fake-agent test adapter before connecting a real model.
+  contract-fixture test suite before connecting the LM Studio model runtime.
 
 Exit gate: automated tests prove that invalid transitions, malformed plans,
 unapproved graph changes, duplicated external actions, and agent-declared

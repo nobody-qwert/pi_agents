@@ -90,11 +90,16 @@ truth.
 
 - An internal `ModelGateway` protocol isolates LangGraph nodes from a specific
   provider SDK.
-- The first adapter targets an OpenAI-compatible chat-completions endpoint.
+- The required adapter targets LM Studio's OpenAI-compatible endpoint.
+- The runtime model is `qwen3.6-27b`, 27B parameters, using the locally loaded
+  `Q4_K_M` four-bit quantization shown in LM Studio.
+- Startup readiness queries LM Studio's model endpoint and rejects execution
+  when the configured model ID is not loaded.
 - Provider credentials remain server-side and are never returned by the graph or
   agent configuration endpoints.
-- The fake deterministic model adapter is the default in automated tests and may
-  be selected in the local UI demo.
+- There is no fake-model runtime mode or silent provider fallback. Unit tests may
+  mock the `ModelGateway` boundary, but Compose demonstrations and end-to-end
+  workflow tests call the configured LM Studio server.
 
 ## 4. Fixed Control Graph
 
@@ -200,8 +205,8 @@ display_name: Design Authority
 description: Produces a bounded versioned design proposal.
 prompt_ref: prompts/design-authority.md
 model:
-  provider: openai-compatible
-  model: configured-by-environment
+  provider: lm-studio
+  model: qwen3.6-27b
   temperature: 0.1
   max_output_tokens: 6000
 execution:
@@ -518,7 +523,7 @@ flowchart LR
     W --> A[api :8000]
     A --> P[(postgres)]
     R[runner] --> P
-    R --> M[model provider]
+    R --> M[LM Studio on host :1234]
     R --> V[(artifact volume)]
     A --> O[otel-collector]
     R --> O
@@ -548,6 +553,13 @@ Named volumes hold PostgreSQL data, artifacts, and observability data. Health
 checks and `depends_on.condition: service_healthy` prevent runner startup before
 the database is ready. Images run as non-root users where supported.
 
+LM Studio runs on the host rather than in this Compose project. The `api` and
+`runner` services map `host.docker.internal` to Docker's `host-gateway` for Linux
+compatibility. LM Studio must listen on an interface reachable from Docker; a
+server bound exclusively to `127.0.0.1` may not be reachable from Linux
+containers. The documented setup should use LM Studio's network-access setting
+or an explicitly configured host address, protected by the host firewall.
+
 ### 11.1 Local configuration
 
 `.env.example` documents:
@@ -556,18 +568,19 @@ the database is ready. Images run as non-root users where supported.
 APP_ENV=development
 APP_BASE_URL=http://localhost:3000
 DATABASE_URL=postgresql+asyncpg://...
-MODEL_PROVIDER=fake | openai-compatible
-MODEL_BASE_URL=
-MODEL_API_KEY=
-MODEL_NAME=
+MODEL_PROVIDER=lm-studio
+LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+LM_STUDIO_API_KEY=lm-studio
+LM_STUDIO_MODEL_ID=qwen3.6-27b
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 OTEL_CONTENT_CAPTURE=false
 ARTIFACT_ROOT=/var/lib/orchestrator/artifacts
 ```
 
-Secrets are supplied at runtime and excluded from images and Git. The fake model
-profile must allow the complete demonstration to run without an external API
-key.
+Secrets are supplied at runtime and excluded from images and Git. LM Studio does
+not normally require a real API secret for its local OpenAI-compatible endpoint;
+the configured placeholder remains server-side. Failure to reach LM Studio or
+find the configured model makes readiness fail with an actionable diagnostic.
 
 ## 12. Repository Layout
 
@@ -669,7 +682,7 @@ README.md
 
 ### 14.4 End-to-end vertical-slice test
 
-Using the fake model adapter:
+Using the required LM Studio Qwen model:
 
 1. Start the Compose stack.
 2. Wait for health/readiness gates.
@@ -693,10 +706,10 @@ transition table pass unit tests without a model or database.
 Outcome: PostgreSQL repositories atomically persist run transitions and ordered
 events; replay and idempotency tests pass.
 
-### WP-3: runner and fake vertical slice
+### WP-3: runner and LM Studio vertical slice
 
-Outcome: the runner executes the fixed graph with fake typed agent responses,
-persists checkpoints, and survives process interruption.
+Outcome: the runner executes the fixed graph through LM Studio with validated
+typed agent responses, persists checkpoints, and survives process interruption.
 
 ### WP-4: command/query API and SSE
 
@@ -718,10 +731,11 @@ events, reload, and continue from durable state.
 Outcome: API/runner traces, safe logs, and metrics arrive through the collector;
 the app deep-links runs and attempts to Grafana.
 
-### WP-8: real model adapter and policy gates
+### WP-8: model hardening and policy gates
 
-Outcome: an OpenAI-compatible endpoint can replace the fake adapter without
-changing graph logic, and malformed/unsafe agent output is rejected visibly.
+Outcome: LM Studio model calls are instrumented, bounded, retried only by policy,
+and malformed or unsafe agent output is rejected visibly without changing graph
+logic.
 
 ### WP-9: hardening and first pilot
 
@@ -742,8 +756,8 @@ The Dockerized vertical slice is complete when:
 - a user can submit a request and receive a durable run ID;
 - the UI displays live, replayable, expandable agent/tool/validation events;
 - refresh/reconnect does not lose or duplicate events;
-- the fake workflow reaches completion only through deterministic transition
-  services;
+- the LM Studio-backed workflow reaches completion only through deterministic
+  transition services;
 - invalid agent output produces a visible rejected-validation event;
 - PostgreSQL and runner restart tests demonstrate resume;
 - traces, logs, and metrics are visible in the local observability stack;
