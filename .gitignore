@@ -23,6 +23,7 @@ coverage/
 artifacts/
 runs/
 sample_logs/
+.work-packet-runs/
 
 # Editors and operating systems
 .vscode/
