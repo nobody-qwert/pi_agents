@@ -16,12 +16,18 @@ The first usable slice must let a user:
 2. Hover over a node to see its purpose, prompt preview, model, tools, timeout,
    retry limit, input schema, and output schema.
 3. Click a node to inspect its full versioned configuration and prompt.
-4. Start a conversation and submit a work request.
-5. Watch the active graph node and progress update in real time.
-6. Expand every agent call, tool call, validation, transition, and approval step.
-7. Reload the browser and replay the run from durable events.
-8. Follow a trace link into the observability dashboard.
-9. Start the complete local stack with `docker compose up --build`.
+4. Select an allowlisted host folder and copy it into a fresh disposable VM.
+5. Start a conversation and submit a work request against that copied workspace.
+6. Watch the active graph node and progress update in real time.
+7. Open the guest desktop, interact with Chromium, and take or return input
+   control without exposing the host desktop.
+8. Expand every agent call, tool call, validation, transition, and approval step.
+9. Restore the guest workspace to a recorded Git checkpoint.
+10. Review a good result and explicitly promote it as a user-confirmed version
+    commit on a new host Git branch.
+11. Reload the browser and replay the run from durable events.
+12. Follow a trace link into the observability dashboard.
+13. Start the complete local stack with `docker compose up --build`.
 
 The first slice demonstrates wiring, state transitions, UI behavior, persistence,
 and observability. It does not need to implement arbitrary real-world work or
@@ -100,6 +106,86 @@ truth.
 - There is no fake-model runtime mode or silent provider fallback. Unit tests may
   mock the `ModelGateway` boundary, but Compose demonstrations and end-to-end
   workflow tests call the configured LM Studio server.
+
+### 3.5 Disposable execution boundary
+
+- Docker Compose hosts the trusted API, runner, persistence, telemetry, egress,
+  and VM-management control plane.
+- A QEMU/KVM guest with an immutable base image and a per-run QCOW2 overlay hosts
+  every model-directed filesystem, shell, build, test, and browser operation.
+- The VM-manager container receives `/dev/kvm`, the VM storage root, read-only
+  allowlisted project roots, and a writable review/export root. It exposes only
+  typed lifecycle and transfer operations, never a generic host-shell endpoint.
+- The selected source folder is copied into
+  `/home/piagent/workspaces/<run-id>/<project>`; it is never mounted into the
+  guest and the agent never receives a writable host path.
+- The guest runs as non-root `piagent` without sudo, host SSH-agent forwarding,
+  host credentials, a Docker socket, or host filesystem sharing.
+- One guest is run-scoped in the first release. It survives bounded leaf-task
+  attempts and is destroyed after promotion, explicit cancellation, or result
+  export according to retention policy.
+
+### 3.6 Pi-compatible guest tools
+
+- A `GuestAgentRuntime` adapter uses Pi's SDK or RPC protocol inside the guest;
+  the first implementation should prefer the SDK for direct session, tool, and
+  event control.
+- Built-in-compatible tools include `read`, `write`, `edit`, `bash`, `grep`,
+  `find`, and `ls`, rooted at the guest workspace.
+- Per-role allowlists are authoritative: planners receive no mutation tools,
+  implementers receive scoped mutation tools, and verifiers receive read and
+  bounded-check tools only.
+- Chromium and Playwright are installed in the sealed guest image. Typed browser
+  tools expose navigation, accessibility snapshots, clicks, text input,
+  screenshots, console output, and network failures.
+- Pi extensions and packages are version-pinned and audited while building the
+  base image. Their in-process permissions remain contained by the guest and do
+  not replace application policy validation.
+
+### 3.7 Guest network and interactive desktop
+
+- Internet access uses a policy-controlled HTTP/HTTPS egress proxy. It denies
+  loopback, host, RFC1918, link-local, metadata, reserved, and LM Studio
+  management destinations and records bounded per-run destination metadata.
+- LM Studio is exposed through a separate inference-only proxy or tunnel with an
+  explicit route allowlist.
+- Chromium runs on a guest virtual display exposed through KasmVNC or noVNC.
+  The application authenticates a short-lived WebSocket session and embeds the
+  screen in the workspace UI; it never exposes a raw VNC listener publicly.
+- Clipboard integration, host file transfer, microphone, camera, and host
+  browser-profile sharing are disabled by default.
+- Input ownership is explicit. `AGENT`, `USER`, and `PAUSED` are deterministic
+  states; taking manual control pauses browser automation before user input is
+  accepted, and returning control records a durable event.
+
+### 3.8 Guest Git and host promotion
+
+- Copy-in excludes the source `.git` directory by default. The checkpoint
+  service initializes a separate guest repository and creates a baseline commit
+  after import.
+- Accepted work creates service-owned checkpoint commits containing the run,
+  work-node, attempt, design, and evidence identifiers. Rollback creates a new
+  lineage event instead of deleting earlier checkpoint records.
+- Guest Git supports recovery but is not authoritative; durable records retain
+  tree hashes and evidence even if the guest repository is damaged.
+- A promotion preview exports to a staging directory and shows the complete
+  diff, changed-file manifest, checks, unresolved issues, source baseline,
+  destination branch, commit message, and proposed version.
+- The UI proposes the next minor semantic version only when the repository has a
+  valid version-tag baseline: `v<major>.<minor>.<patch>` becomes
+  `v<major>.<minor+1>.0`. The authenticated user may edit and must confirm the
+  exact label.
+- Confirmed promotion revalidates the source HEAD and cleanliness, creates an
+  isolated host Git worktree and `orchestrator/<version>-<run-id>` branch,
+  applies the exported result, reruns required promotion checks, and creates one
+  commit plus an optional unique annotated tag. It never changes the user's
+  current checkout.
+- A dirty, advanced, non-Git, conflicting, or failed-validation source is not
+  mutated. The export is committed into a separate result repository for manual
+  review instead.
+- Promotion applies a manifest-checked delta between the sanitized import
+  baseline and selected guest checkpoint. Excluded or protected host paths
+  cannot be modified or inferred as deletions.
 
 ## 4. Fixed Control Graph
 
@@ -262,12 +348,17 @@ API layer
       -> registry projection service
       -> approval service
       -> event service
+      -> workspace/checkpoint service
+      -> promotion service
   -> ports
       -> PostgreSQL repositories
       -> checkpoint saver
       -> artifact store
       -> model gateway
       -> tool gateway
+      -> VM manager
+      -> guest agent runtime
+      -> egress policy gateway
       -> telemetry exporter
 ```
 
@@ -306,6 +397,32 @@ change. Each run has a monotonically increasing `sequence`. PostgreSQL
 Is the sole boundary for reading or writing deliverable artifacts. It validates
 logical artifact IDs, size/type policy, access scope, expected version, and
 content hash. Workers do not receive arbitrary host filesystem access.
+Guest workspace mutations are provisional execution state; only validated
+copy-out through this service creates an authoritative artifact version.
+
+### 6.7 VM and workspace service
+
+Owns allowlisted project discovery, source fingerprinting, sanitized copy-in,
+run-scoped VM creation, SSH/control-channel readiness, preview tunnels, desktop
+session tokens, copy-out, and guest destruction. The VM manager accepts typed
+operations and validated identifiers only. The runner sends tool requests to the
+guest runtime through this service; neither the model nor browser can address
+the VM-manager host process directly.
+
+### 6.8 Checkpoint service
+
+Initializes the separate guest Git repository, creates the baseline and accepted
+work-node commits, validates commit/tree hashes, lists restorable checkpoints,
+and performs idempotent rollback. It cannot promote to the host or mark a work
+node verified.
+
+### 6.9 Promotion service
+
+Builds an immutable export preview, proposes a version label, validates an
+authenticated confirmation, rechecks the recorded host baseline, creates an
+isolated Git worktree and branch, applies the export, runs required checks, and
+records the resulting commit and optional tag. It never runs model-supplied Git
+commands and never modifies the user's current checkout.
 
 ## 7. Durable Data Model
 
@@ -320,6 +437,11 @@ Initial PostgreSQL tables:
 | `run_events` | ordered durable UI/audit event stream |
 | `agent_registry_versions` | immutable loaded registry snapshot |
 | `agent_attempts` | agent input/result references, status, usage, trace ID |
+| `workspace_sessions` | selected source, source fingerprint, VM/overlay identity, lifecycle and input owner |
+| `workspace_checkpoints` | guest commit/tree hash, work node, evidence, parent and rollback lineage |
+| `workspace_transfers` | sanitized copy-in/copy-out manifest, exclusions, hashes, status |
+| `promotion_previews` | immutable exported diff, manifest, checks, proposed target/version |
+| `promotions` | authenticated decision, idempotency key, branch, commit, tag, result |
 | `design_revisions` | immutable design versions and acceptance state |
 | `work_nodes` | proposed/approved work-node records and state |
 | `work_edges` | dependency/interface edges between work nodes |
@@ -378,6 +500,12 @@ work_node.started           work_node.verified
 design.revised              work_node.invalidated
 approval.requested          approval.recorded
 artifact.created            evidence.recorded
+workspace.selected          workspace.imported
+workspace.checkpointed      workspace.rolled_back
+vm.started                  vm.ready
+vm.input_owner_changed      vm.destroyed
+promotion.previewed         promotion.confirmed
+promotion.committed         promotion.rejected
 ```
 
 ### 8.1 SSE behavior
@@ -396,9 +524,9 @@ after the run reaches a terminal state or the client disconnects. Large detail
 payloads are fetched lazily through `detail_ref` when the user expands a step.
 
 SSE is preferred over a single streaming POST because runs outlive individual
-HTTP requests and browser sessions. WebSockets are unnecessary for the first
-slice; approvals and chat messages use ordinary commands while SSE carries
-server events.
+HTTP requests and browser sessions. Approvals and chat messages use ordinary
+commands while SSE carries server events. WebSockets are reserved for the
+interactive guest display and are not used as a second run-event transport.
 
 ### 8.2 Event detail views
 
@@ -417,6 +545,12 @@ Expandable event details are typed by event category:
   comment, expiration.
 - Artifact/evidence: logical identity, version, hash, producer, criterion links,
   safe preview, access policy.
+- Workspace/checkpoint: sanitized source identity, source fingerprint, guest
+  path, checkpoint commit/tree hash, lineage, rollback actor, and current input
+  owner.
+- Promotion: immutable diff/manifest reference, baseline comparison, confirmed
+  version, destination worktree/branch, check results, commit/tag, and rejection
+  reason.
 
 Raw chain-of-thought is never requested or displayed. The UI shows prompts,
 structured inputs/outputs, tool activity, summaries, and explicit decision
@@ -434,6 +568,9 @@ GET    /api/v1/system/graph
 GET    /api/v1/system/agents
 GET    /api/v1/system/agents/{agent_id}
 
+GET    /api/v1/projects
+GET    /api/v1/projects/{project_id}
+
 POST   /api/v1/conversations
 GET    /api/v1/conversations
 GET    /api/v1/conversations/{conversation_id}
@@ -445,26 +582,44 @@ POST   /api/v1/runs/{run_id}/cancel
 GET    /api/v1/runs/{run_id}/events
 GET    /api/v1/runs/{run_id}/events/{event_id}/detail
 GET    /api/v1/runs/{run_id}/work-graph
+GET    /api/v1/runs/{run_id}/workspace
+GET    /api/v1/runs/{run_id}/workspace/checkpoints
+POST   /api/v1/runs/{run_id}/workspace/checkpoints
+POST   /api/v1/runs/{run_id}/workspace/checkpoints/{checkpoint_id}/rollback
+POST   /api/v1/runs/{run_id}/workspace/desktop-sessions
+POST   /api/v1/runs/{run_id}/workspace/input-owner
+GET    /api/v1/runs/{run_id}/workspace/previews
 
 GET    /api/v1/runs/{run_id}/approvals
 POST   /api/v1/runs/{run_id}/approvals/{approval_id}/decisions
 
 GET    /api/v1/runs/{run_id}/artifacts
 GET    /api/v1/artifacts/{artifact_id}
+
+GET    /api/v1/runs/{run_id}/promotions
+POST   /api/v1/runs/{run_id}/promotion-previews
+POST   /api/v1/runs/{run_id}/promotions
 ```
 
 `POST /messages` may either continue ordinary conversation or request a new run.
 The response includes the durable message and run IDs; live output arrives over
 the run event stream.
 
+`GET /projects` returns opaque selections discovered only under configured host
+roots. Run creation accepts a `project_id`, never an arbitrary client-supplied
+absolute path. Promotion creation references an immutable preview and carries
+the authenticated user's exact version, commit message, tag choice, and
+confirmation nonce.
+
 ## 10. Frontend Information Architecture
 
 ### 10.1 Main shell
 
-The application has three primary views:
+The application has four primary views:
 
 - Workspace: conversation and live run timeline.
 - Graph: static control graph with optional current-run overlay.
+- VM Desktop: interactive guest screen, previews, checkpoints, and input owner.
 - Runs: searchable run history, status, duration, cost, issues, and evidence.
 
 A right-side inspector is shared by graph nodes, execution events, work nodes,
@@ -474,6 +629,13 @@ artifacts, and approvals.
 
 The main column shows user and assistant messages. A run started from a user
 message inserts a pipeline card directly below that message.
+
+Before the first run, the user selects a project from a server-provided folder
+browser rooted at configured allowlists. The start form previews the source
+path, Git HEAD and cleanliness, copy exclusions, estimated size, and whether
+direct Git promotion will be eligible. Starting the run creates the guest,
+copies the snapshot, initializes the separate guest Git baseline, and only then
+enables work submission.
 
 The collapsed pipeline card shows:
 
@@ -515,6 +677,36 @@ and event publication spans.
 The app should not attempt to recreate a full observability backend. It surfaces
 correlated summaries and deep-links for engineering investigation.
 
+### 10.5 VM desktop and web previews
+
+The VM Desktop view embeds the guest display through an authenticated
+KasmVNC/noVNC WebSocket proxy. It shows VM/SSH/browser health, egress mode,
+active preview ports, input owner, and connection expiration. A `Take control`
+action first transitions input ownership from `AGENT` to `PAUSED` and then
+`USER`; `Return to agent` reverses that sequence. Browser automation cannot
+continue while the user owns input.
+
+The VM manager opens localhost-bound SSH tunnels for validated guest application
+ports. Preview links identify the run and port, expire with the VM session, and
+do not expose arbitrary host ports. Clipboard and upload controls are disabled
+unless separately approved.
+
+### 10.6 Checkpoints and version promotion
+
+The workspace inspector lists the guest baseline and accepted checkpoints with
+their work node, time, tree hash, checks, and current marker. `Roll back` shows
+the files that would change and requires confirmation; it affects only the
+guest and remains visible as a lineage event.
+
+The `Promote good version` action first pauses guest mutations, runs configured
+checks, records a `USER_ACCEPTED` guest checkpoint, and creates a read-only
+preview. The modal shows the full diff and manifest, acceptance evidence,
+unresolved issues, recorded versus current source baseline, protected excluded
+paths, target branch, editable commit message, and editable proposed minor
+version. Confirmation is disabled on conflict or failed required checks.
+Success displays the new host branch, commit, and tag, with instructions for
+reviewing or merging it; the current host checkout is not switched or modified.
+
 ## 11. Docker Compose Topology
 
 ```mermaid
@@ -525,6 +717,15 @@ flowchart LR
     R[runner] --> P
     R --> M[LM Studio on host :1234]
     R --> V[(artifact volume)]
+    A --> VM[vm-manager]
+    R --> VM
+    W -->|authenticated desktop WS| D[desktop-gateway]
+    D --> VM
+    VM --> Q[Disposable QEMU/KVM guest]
+    Q --> E[egress-proxy]
+    E --> I[Public internet]
+    Q --> MP[inference-only proxy]
+    MP --> M
     A --> O[otel-collector]
     R --> O
     O --> T[tempo]
@@ -542,6 +743,10 @@ Compose services:
 | `web` | builds/serves React application and proxies `/api` in local mode |
 | `api` | FastAPI commands, queries, registry projection, SSE |
 | `runner` | LangGraph execution and durable event production |
+| `vm-manager` | allowlisted copy-in/out, QEMU/KVM lifecycle, guest control channel, checkpoints, preview tunnels |
+| `desktop-gateway` | authenticated short-lived WebSocket proxy to the active guest display |
+| `egress-proxy` | policy-controlled guest HTTP/HTTPS access with private/host destination denial |
+| `model-proxy` | inference-only LM Studio route allowlist for guest model calls |
 | `postgres` | authoritative state, event log, checkpoints |
 | `otel-collector` | receives OTLP and routes telemetry |
 | `tempo` | trace storage |
@@ -549,16 +754,23 @@ Compose services:
 | `prometheus` | metric storage/scraping |
 | `grafana` | pre-provisioned local dashboards and trace/log exploration |
 
-Named volumes hold PostgreSQL data, artifacts, and observability data. Health
+Named volumes hold PostgreSQL data, artifacts, VM base/overlay data, staged
+exports, and observability data. The VM manager also receives `/dev/kvm`,
+read-only configured project roots, and a writable dedicated result root. No
+guest receives those mounts. Health
 checks and `depends_on.condition: service_healthy` prevent runner startup before
 the database is ready. Images run as non-root users where supported.
 
-LM Studio runs on the host rather than in this Compose project. The `api` and
-`runner` services map `host.docker.internal` to Docker's `host-gateway` for Linux
-compatibility. LM Studio must listen on an interface reachable from Docker; a
-server bound exclusively to `127.0.0.1` may not be reachable from Linux
-containers. The documented setup should use LM Studio's network-access setting
-or an explicitly configured host address, protected by the host firewall.
+LM Studio runs on the host rather than in this Compose project. The runner uses
+a server-side model adapter, while the guest reaches only the inference-only
+proxy through a dedicated tunnel. LM Studio should remain bound to host
+loopback; the proxy explicitly permits required OpenAI-compatible inference and
+model-readiness routes and denies native management routes.
+
+The VM-manager container is trusted and Linux-specific. It uses host networking
+only where required for localhost SSH/QMP forwarding, binds management endpoints
+to loopback or a private Compose network, has no Docker socket, and runs QEMU as
+the configured non-root host UID with KVM group access.
 
 ### 11.1 Local configuration
 
@@ -575,6 +787,13 @@ LM_STUDIO_MODEL_ID=qwen3.6-27b
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 OTEL_CONTENT_CAPTURE=false
 ARTIFACT_ROOT=/var/lib/orchestrator/artifacts
+PI_VM_ROOT=/var/lib/orchestrator/vms
+PROJECT_ROOTS=/projects
+RESULT_ROOT=/var/lib/orchestrator/results
+GUEST_WORKSPACE_ROOT=/home/piagent/workspaces
+GUEST_EGRESS_MODE=web-proxy
+DESKTOP_SESSION_TTL_SECONDS=900
+PROMOTION_BRANCH_PREFIX=orchestrator/
 ```
 
 Secrets are supplied at runtime and excluded from images and Git. LM Studio does
@@ -612,8 +831,19 @@ frontend/
     features/chat/
     features/graph/
     features/runs/
+    features/vm-desktop/
+    features/promotion/
     features/trace/
     types/
+vm-manager/
+  Dockerfile
+  src/
+    lifecycle/
+    transfer/
+    checkpoints/
+    promotion/
+    desktop/
+    egress/
 observability/
   otel-collector.yaml
   tempo.yaml
@@ -623,10 +853,14 @@ observability/
 config/
   agents/
   prompts/
+docs/
+  design/
+    PLAN.md
+    TECHNICAL_DETAILS.md
+  work-packets/
 docker-compose.yml
 .env.example
-PLAN.md
-TECHNICAL_DETAILS.md
+AGENTS.md
 README.md
 ```
 
@@ -639,7 +873,20 @@ README.md
   policy to the browser.
 - Sanitize Markdown and disable arbitrary HTML/script execution.
 - Validate tool calls against an allowlisted tool registry and per-agent policy.
-- Run dangerous tools in a separate sandbox service; no host Docker socket.
+- Run dangerous tools only in the disposable guest; no host Docker socket,
+  writable project mount, SSH-agent forwarding, sudo-capable guest user, or
+  generic VM-manager command endpoint.
+- Resolve selected projects against canonical configured roots and apply a
+  default-deny copy manifest for `.git`, secrets, credentials, caches, and build
+  output.
+- Route guest web access through an egress policy that rejects host, private,
+  link-local, metadata, reserved, and rebinding destinations.
+- Authenticate desktop sessions with short-lived run-scoped tokens; disable
+  clipboard and host file transfer by default and serialize input ownership.
+- Require immutable preview, baseline recheck, user confirmation, isolated
+  worktree, required checks, and idempotency before host Git promotion.
+- Never switch or write the user's active checkout, and refuse direct promotion
+  when the source baseline is dirty, stale, conflicting, or non-Git.
 - Apply request, event-stream, model, token, tool, artifact-size, and run budgets.
 - Redact or omit protected content before logs and OTel export.
 - Encrypt production transport and sensitive persistent data.
@@ -656,6 +903,11 @@ README.md
 - graph registry/config validation;
 - work-graph DAG and coverage validation;
 - leaf-readiness and authority checks;
+- project-root canonicalization and copy-exclusion policy;
+- checkpoint lineage, rollback guards, and tree-hash validation;
+- semantic-version proposal and promotion idempotency/conflict guards;
+- desktop input-owner transition rules and token expiration;
+- egress destination and DNS-rebinding policy;
 - event serialization and redaction;
 - idempotent command and retry behavior.
 
@@ -668,6 +920,13 @@ README.md
 - SSE initial replay, live tail, reconnect, and terminal close;
 - approval pause/resume and stale approval rejection;
 - artifact version conflicts and access control;
+- VM lifecycle, sanitized copy-in, separate guest Git baseline, export, and
+  overlay destruction;
+- guest-only tool execution with no writable host project mount;
+- desktop token/authentication and exclusive user/agent input control;
+- checkpoint restore followed by continued execution;
+- promotion preview, isolated worktree commit/tag, duplicate request, dirty
+  source, changed HEAD, and validation-failure behavior;
 - OTLP export with content capture disabled.
 
 ### 14.3 Frontend tests
@@ -677,6 +936,10 @@ README.md
 - pipeline event upsert from started to terminal state;
 - nested event detail expansion;
 - SSE reconnection without duplicates;
+- allowlisted project selection and copy-policy preview;
+- embedded desktop connection, expiration, reconnect, and take/return control;
+- checkpoint list, rollback preview, and current-checkpoint update;
+- promotion diff, editable version confirmation, success, and conflict states;
 - approval and failure states;
 - keyboard navigation and accessible labels.
 
@@ -686,13 +949,21 @@ Using the required LM Studio Qwen model:
 
 1. Start the Compose stack.
 2. Wait for health/readiness gates.
-3. Open the workspace and verify the fixed graph.
-4. Submit a predefined work request.
-5. Observe deterministic traversal with at least one agent call, tool call,
+3. Select a clean fixture Git project and verify its sanitized snapshot is
+   copied into a fresh guest with a separate baseline Git commit.
+4. Open the workspace and verify the fixed graph and interactive guest desktop.
+5. Submit a predefined web-oriented work request.
+6. Observe deterministic traversal with at least one guest agent call, tool call,
    validation, and final response.
-6. Expand each step and verify typed details.
-7. Reload during execution and resume from the last event sequence.
-8. Verify the completed run and trace are visible after restart.
+7. Take and return desktop control, open the guest browser, and verify controlled
+   public web access cannot reach denied host/private destinations.
+8. Create a checkpoint, make another change, roll back, and continue the run.
+9. Expand each step and verify typed details.
+10. Reload during execution and resume from the last event sequence.
+11. Preview and confirm a minor-version promotion; verify the new host branch,
+    commit, and optional tag exist while the original checkout is unchanged.
+12. Destroy the guest and verify the completed run, trace, promotion record, and
+    exported evidence remain visible after restart.
 
 ## 15. Implementation Work Packages
 
@@ -706,38 +977,48 @@ transition table pass unit tests without a model or database.
 Outcome: PostgreSQL repositories atomically persist run transitions and ordered
 events; replay and idempotency tests pass.
 
-### WP-3: runner and LM Studio vertical slice
+### WP-3: disposable VM and workspace foundation
+
+Outcome: an allowlisted project snapshot is copied into a fresh non-root KVM
+guest, a separate guest Git baseline and restorable checkpoints are recorded,
+tool execution cannot mutate the host project, and export destroys no source
+state.
+
+### WP-4: runner and LM Studio vertical slice
 
 Outcome: the runner executes the fixed graph through LM Studio with validated
-typed agent responses, persists checkpoints, and survives process interruption.
+typed agent responses, delegates permitted Pi-compatible tools into the guest,
+persists LangGraph checkpoints, and survives process interruption.
 
-### WP-4: command/query API and SSE
+### WP-5: command/query API and SSE
 
 Outcome: conversations and runs can be created, queried, cancelled, approved,
 and followed through a reconnectable event stream.
 
-### WP-5: graph/config UI
+### WP-6: graph/config UI
 
 Outcome: the backend-defined graph renders with hover previews, full node
 inspection, and live run-state overlay.
 
-### WP-6: chat and expandable execution UI
+### WP-7: chat, VM desktop, and promotion UI
 
 Outcome: users submit work, see streamed progress/answer content, expand typed
-events, reload, and continue from durable state.
+events, interact with the guest desktop, manage checkpoints, preview a result,
+and promote a confirmed version without changing the current host checkout.
 
-### WP-7: OpenTelemetry and local dashboards
+### WP-8: OpenTelemetry and local dashboards
 
 Outcome: API/runner traces, safe logs, and metrics arrive through the collector;
 the app deep-links runs and attempts to Grafana.
 
-### WP-8: model hardening and policy gates
+### WP-9: model, tool, egress, and promotion hardening
 
 Outcome: LM Studio model calls are instrumented, bounded, retried only by policy,
-and malformed or unsafe agent output is rejected visibly without changing graph
-logic.
+malformed or unsafe agent output is rejected visibly, guest egress and desktop
+access are constrained, and stale or unsafe promotion attempts cannot change
+host Git.
 
-### WP-9: hardening and first pilot
+### WP-10: hardening and first pilot
 
 Outcome: adversarial, recovery, accessibility, and end-to-end checks pass for a
 bounded software-domain pilot.
@@ -753,6 +1034,16 @@ The Dockerized vertical slice is complete when:
 - the UI graph comes from the backend registry and shows only permitted edges;
 - every graph node exposes a safe prompt/config preview and complete operator
   inspector;
+- a user can select only a folder under configured project roots, inspect its
+  copy policy, and start from a sanitized snapshot in a fresh disposable guest;
+- all model-directed file, shell, build, test, and browser actions occur inside
+  the guest with no writable host project mount;
+- the guest has a separate Git baseline, accepted checkpoints, and a verified
+  rollback flow;
+- the UI embeds the guest desktop, supports exclusive take/return control, and
+  exposes localhost-bound application previews;
+- the guest can reach public web resources through controlled egress while host,
+  private, metadata, and LM Studio management destinations remain denied;
 - a user can submit a request and receive a durable run ID;
 - the UI displays live, replayable, expandable agent/tool/validation events;
 - refresh/reconnect does not lose or duplicate events;
@@ -760,8 +1051,13 @@ The Dockerized vertical slice is complete when:
   transition services;
 - invalid agent output produces a visible rejected-validation event;
 - PostgreSQL and runner restart tests demonstrate resume;
+- a reviewed result can be promoted to a new branch and user-confirmed minor
+  version commit/tag without switching or modifying the current host checkout;
+- dirty, stale, conflicting, duplicate, and failed-validation promotion attempts
+  are refused or routed to a separate review repository;
 - traces, logs, and metrics are visible in the local observability stack;
-- no external developer-agent runtime is required.
+- the required Pi-compatible guest runtime and browser tooling are installed in
+  the sealed VM image; no developer-agent runtime is required on the host.
 
 ## 17. Open Design Decisions
 
@@ -781,8 +1077,17 @@ These should be resolved before implementing their owning work package:
    capture as an explicit short-lived option.
 7. Whether Grafana/Loki/Tempo/Prometheus run by default or behind a Compose
    `observability` profile for lighter startup.
+8. Guest display implementation: noVNC for the first slice versus KasmVNC from
+   the start.
+9. Which public package registries and download-size limits are enabled in the
+   default web-egress policy.
+10. Fallback version labels for repositories without valid semantic-version
+    tags.
 
 Recommended first choices: development identity header, PostgreSQL-backed runner
 leases and notifications, local artifact volume, read-only agent configuration,
 administrator-only full prompts in production, content capture disabled by
-default, and the full observability stack enabled in the documented demo command.
+default, the full observability stack enabled in the documented demo command,
+noVNC initially, HTTP/HTTPS proxy egress with explicit registry policy, and a
+user-confirmed `run-<date>-<short-id>` fallback when no semantic-version baseline
+exists.

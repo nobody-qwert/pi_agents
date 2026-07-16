@@ -18,6 +18,11 @@ The harness must:
 - integrate component outputs against shared interfaces and invariants;
 - route defects and discoveries back to the correct loop;
 - retain traceability from the original request to final evidence;
+- materialize model-directed work only in a disposable VM copied from an
+  allowlisted host folder;
+- provide guest-local checkpoints and rollback without exposing the host
+  repository to agent tools;
+- promote a reviewed result to host Git only after an explicit user decision;
 - remain sequential, foreground, fresh-context, and non-nested under the
   repository's current execution rules.
 
@@ -171,6 +176,9 @@ The runtime stores these typed records in durable storage:
 | `EvidenceRecord` | verifier/integration acceptance service | check result and supporting artifact references |
 | `IssueRecord` | triage service | observed problem, classification, affected-node set |
 | `ApprovalRecord` | authenticated human approval service | approver, authority, decision, timestamp, revision |
+| `WorkspaceRecord` | workspace service | selected source, baseline fingerprint, guest identity, lifecycle state |
+| `CheckpointRecord` | checkpoint service | guest commit/tree hash, accepted node, evidence, rollback lineage |
+| `PromotionRecord` | promotion service | reviewed export, confirmed version, target branch/commit/tag, result |
 
 Agent output is an append-only proposal or report associated with a run and
 node. It does not write an authoritative record directly. This makes the audit
@@ -199,6 +207,69 @@ trail reconstructable even when an agent response is malformed or rejected.
 - Run untrusted tools or artifact generation in isolated execution environments;
   LangGraph routing is not a filesystem, network, or credential sandbox.
 
+### 3.5 Execution boundary and workspace lifecycle
+
+The Docker Compose application is the trusted control plane. Model-directed
+filesystem, shell, build, test, browser, and artifact-generation tools execute
+inside a disposable QEMU/KVM guest, not in the API, runner, VM-manager
+container, or host working tree.
+
+At run creation, the user selects a folder from administrator-configured host
+project roots. The workspace service resolves the selection against that
+allowlist, records the source Git commit and working-tree fingerprint when
+available, and copies a sanitized snapshot into:
+
+```text
+/home/piagent/workspaces/<run-id>/<project-name>
+```
+
+The source is mounted read-only only into the trusted VM-manager service for the
+copy operation. It is never mounted into the guest. Secrets, environment files,
+host SSH material, dependency caches, build output, and the source `.git`
+directory are excluded by default.
+
+After import, a workspace checkpoint service initializes a new Git repository
+inside the guest and creates an immutable baseline commit. This is deliberately
+separate from the host repository. Accepted work-node outputs may create
+service-owned checkpoint commits. The user may also mark the current guest state
+as a candidate, which pauses mutations, runs configured checks, and records a
+`USER_ACCEPTED` checkpoint without pretending it has passed independent outcome
+verification. The user may request rollback to any restorable checkpoint. Guest
+Git is a rollback mechanism, not the authoritative audit store: checkpoint
+metadata, tree hash, producer, evidence, and design version remain durable
+domain records.
+
+One disposable guest is used for a complete run in the first release. Roles
+receive different tool sets: implementation roles may mutate the guest copy;
+verification roles are read-only; no role receives a host shell. The guest
+provides a Chromium desktop and browser-automation tools through an authenticated
+per-run display channel. Web access goes through a policy-controlled egress
+proxy that denies host, private, link-local, metadata, and management endpoints.
+
+The host source changes only through an explicit promotion workflow:
+
+```text
+review result and evidence -> choose version -> confirm promotion
+  -> recheck source baseline -> export to isolated host worktree
+  -> validate -> create branch + commit + optional annotated tag
+```
+
+Promotion never writes into the user's current checkout. For a clean Git source
+whose recorded baseline is still current, it creates an isolated worktree and a
+branch such as `orchestrator/<version>-<run-id>`, then commits the exported tree.
+The UI proposes the next minor semantic version when valid version tags exist,
+but the user owns and confirms the exact label. A tag is created only when the
+confirmed label is unique. If the source is dirty, its HEAD changed, validation
+fails, or paths escape policy, direct promotion is refused and the result
+remains in a separate versioned review repository. A non-Git source is likewise
+exported to a newly initialized result repository unless the user separately
+authorizes repository creation at the source.
+
+Promotion applies the reviewed delta between the sanitized imported baseline
+and the selected guest checkpoint. Paths excluded from import are protected and
+cannot appear as deletions or modifications in that delta. This preserves host
+`.env` files, credentials, caches, ignored artifacts, and other host-only state.
+
 ## 4. Canonical Run Artifacts
 
 Each run has an artifact bundle. In production, the typed durable records in
@@ -218,8 +289,11 @@ runs/<run-id>/
   WORK_GRAPH.md          # nodes, edges, owners, state, traceability
   ISSUES.md              # findings and routing decisions
   EVIDENCE.md            # acceptance and review evidence index
+  WORKSPACE.md           # source fingerprint, guest identity, import/export policy
+  PROMOTIONS.md          # explicit publish decisions and resulting Git references
   packets/<task-id>.md   # immutable packet revision handed to a worker
   reports/<task-id>.md   # compact worker/verifier result
+  checkpoints/<id>.md    # accepted guest checkpoint and tree hash
 ```
 
 Runtime bundles must be stored outside product artifacts and governed by tenant,
@@ -559,6 +633,30 @@ For a design revision:
 This is the main outer iteration loop. Workers and testers report evidence; they
 do not edit the design informally.
 
+### 7.7 Loop G: workspace review, rollback, and promotion
+
+```text
+selected host folder -> copied guest baseline -> accepted checkpoints
+                                  |                    |
+                                  | rollback           | user marks good version
+                                  v                    v
+                         prior checkpoint       promotion preview
+                                                       |
+                                  baseline conflict <--+--> confirmed publish
+                                                               |
+                                                               v
+                                                    host branch + commit/tag
+```
+
+Rollback changes only the disposable guest workspace and records a new lineage
+event; it never rewrites authoritative evidence or the host repository.
+Promotion is a user-owned external action. Before enabling the confirmation
+button, the application presents the exported diff, changed-file manifest,
+checks, unresolved issues, destination repository, proposed branch, commit
+message, and version label. A successful promotion records the exact source and
+result commits and is idempotent for the same run, checkpoint, target, and
+version.
+
 ## 8. Context Engineering Rules
 
 Each handoff is assembled from references, not accumulated conversation history.
@@ -666,6 +764,12 @@ artifacts, evidence methods, and risk gates differ from software.
   identifies whether the packet, output, interface, or design owns the defect.
 - No loop repeats without a changed artifact, new evidence, or revised
   hypothesis.
+- No model-directed tool executes against a writable host project path.
+- No rollback operation changes the host repository or erases audit records.
+- No result promotion occurs without an authenticated user confirmation,
+  baseline recheck, successful export validation, and unique idempotency key.
+- No promotion overwrites a dirty or advanced host checkout; conflicts remain
+  staged for review.
 - Bounded loop budgets are configured per role and node; exhaustion produces a
   concrete blocker, not an invented completion.
 - High-risk domains require explicit sources, effective dates, jurisdiction,
@@ -687,6 +791,8 @@ Deliverables:
 - decide runtime artifact location and retention policy;
 - decide whether `WORK_GRAPH` begins as Markdown only or Markdown plus a
   machine-readable index;
+- approve the disposable-VM workspace, guest checkpoint, and host promotion
+  contract;
 - select the first end-to-end pilot task and its risk limits.
 
 Exit gate: the user approves the role boundaries, artifact ownership, and
@@ -714,6 +820,9 @@ Changes:
 - implement charter, design-revision, proposed-work-plan, and packet schemas;
 - add deterministic graph validation, leaf-readiness checks, ready-queue
   selection, and immutable packet issuance;
+- integrate allowlisted folder selection, copy-in to a fresh disposable guest,
+  guest-only Git checkpoints, rollback, interactive desktop access, and
+  policy-controlled web egress;
 - connect the first software-domain planner, worker, and verifier adapters;
 - record all agent output as proposals/reports, then accept only validated data.
 
@@ -806,6 +915,8 @@ The first review should settle these questions before Phase 1:
    fictional company package, or both in sequence?
 7. Which decisions always require authenticated human confirmation regardless of
    domain risk?
+8. Which repositories use semantic version tags, and what fallback label policy
+   applies when a selected source has no valid version baseline?
 
 The recommended starting choices are: Postgres-backed authoritative state and
 checkpointing with object storage for artifacts; a static control graph with
@@ -822,6 +933,12 @@ The architecture is successful when:
 - every leaf output traces to charter criteria, design version, dependencies,
   and acceptance evidence;
 - fresh agents can resume from canonical artifacts without prior transcripts;
+- a selected host folder is copied into a disposable guest where all
+  model-directed tools and mutable work remain isolated;
+- the user can inspect the guest desktop, roll back to an accepted guest Git
+  checkpoint, and continue the same run;
+- a reviewed result can be promoted idempotently to a new host Git branch and
+  user-confirmed version commit without changing the current checkout;
 - a component defect, integration mismatch, design flaw, and requirement gap are
   routed to different explicit loops;
 - design changes invalidate exactly the work whose assumptions changed;

@@ -8,9 +8,19 @@ The application will provide:
 - a visual graph of agent stages and permitted transitions;
 - inspectable prompts, model settings, tools, schemas, and policy limits;
 - a chat interface for submitting work and continuing conversations;
+- an allowlisted project picker that copies work into a disposable KVM guest;
+- a live, interactive guest desktop with Chromium for web-oriented work;
 - live run progress with expandable agent, tool, validation, and approval steps;
 - durable run state, resumable event streams, and OpenTelemetry observability;
+- guest-local Git checkpoints, rollback, and explicit version promotion back to
+  a host Git repository;
 - deterministic enforcement around agent proposals and state transitions.
+
+Model-directed filesystem, shell, browser, build, and test operations run only
+inside the disposable guest. The original host folder is never mounted writable
+into that guest. A run starts from a copied snapshot and can affect the host
+repository only through a reviewed, authenticated promotion command that creates
+a new branch and commit without changing the user's current working tree.
 
 ## Model runtime
 
@@ -27,15 +37,19 @@ Before starting the Compose stack:
 4. Confirm the served model ID and set `LM_STUDIO_MODEL_ID` when it differs from
    `qwen3.6-27b`.
 
-This branch currently contains design documents, not a runnable application.
+The main application on this branch is still a design target, not a runnable
+implementation. `sample_disposable_vm/` is a reference VM-manager prototype;
+it is not yet integrated into the production Compose topology described here.
 
 ## Documents
 
-- [PLAN.md](PLAN.md) defines the product model, role boundaries, work graph,
-  deterministic runtime contract, and rollout strategy.
-- [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md) defines the proposed technology
-  stack, service architecture, schemas, APIs, UI behavior, Docker Compose
-  topology, testing strategy, and implementation sequence.
+- [Design plan](docs/design/PLAN.md) defines the product model, role boundaries,
+  work graph, deterministic runtime contract, and rollout strategy.
+- [Technical details](docs/design/TECHNICAL_DETAILS.md) define the proposed
+  technology stack, service architecture, schemas, APIs, UI behavior, Docker
+  Compose topology, and testing strategy.
+- [Implementation work packets](docs/work-packets/README.md) provide the
+  dependency-ordered, bounded handoffs intended for developer-agent execution.
 
 ## Branch intent
 

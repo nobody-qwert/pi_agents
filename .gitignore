@@ -28,3 +28,4 @@ sample_logs/
 .vscode/
 .idea/
 .DS_Store
+sample_disposable_vm/
