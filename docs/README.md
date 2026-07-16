@@ -9,6 +9,3 @@ Documentation is organized by responsibility:
   handoffs for developer-agent execution.
 
 The repository-level `README.md` remains at the root as the project entry point.
-The repository-level `AGENTS.md` also remains at the root so its development and
-verification rules apply to the entire tree. Add a nested `AGENTS.md` only when a
-subdirectory needs additional scoped instructions.

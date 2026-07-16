@@ -9,8 +9,8 @@ handoffs for a fresh developer-agent context.
 
 1. Implement packets in numeric order unless a packet explicitly permits a
    different dependency.
-2. Give the developer agent this index, one packet, the repository instructions,
-   and only the design sections linked by that packet.
+2. Give the developer agent this index, one packet, and only the design sections
+   linked by that packet.
 3. Treat the packet's `In scope` list as authority, not as a suggestion.
 4. Stop when its acceptance criteria pass. Do not begin the next packet in the
    same context.
@@ -35,7 +35,7 @@ For orientation, the sequence has five cohesive bands:
 Suggested developer-agent instruction:
 
 ```text
-Implement only docs/work-packets/NNN-....md. Read the root AGENTS.md and only
+Implement only docs/work-packets/NNN-....md. Read this work-packet index and only
 the design sections referenced by that packet. Inspect the current repository
 before editing, preserve existing user changes, satisfy every acceptance
 criterion, run the repository's relevant verification commands, report exact

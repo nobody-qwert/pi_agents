@@ -8,7 +8,6 @@ that later backend packets can extend.
 ## Context and references
 
 - `docs/design/TECHNICAL_DETAILS.md` Sections 3.1, 11.1, and 12.
-- Root `AGENTS.md`.
 
 ## Dependencies
 
@@ -47,4 +46,3 @@ that later backend packets can extend.
 ## Handoff
 
 - Report the chosen package/tool commands and stop before defining domain state.
-

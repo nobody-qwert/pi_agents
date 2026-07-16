@@ -860,7 +860,6 @@ docs/
   work-packets/
 docker-compose.yml
 .env.example
-AGENTS.md
 README.md
 ```
 
