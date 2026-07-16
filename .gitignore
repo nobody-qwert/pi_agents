@@ -1,2 +1,30 @@
-/sample_logs/
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Frontend
+node_modules/
+frontend/dist/
+coverage/
+
+# Local runtime data
+artifacts/
+runs/
+sample_logs/
+
+# Editors and operating systems
 .vscode/
+.idea/
+.DS_Store

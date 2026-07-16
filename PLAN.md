@@ -1,14 +1,13 @@
 # Generic Nested-Loop Orchestration Plan
 
 Status: draft for deterministic LangGraph production-design iteration
-Scope: architecture and rollout plan only; no Pi configuration changes are
-authorized by this document yet
+Scope: architecture and rollout plan only; implementation begins after the
+technical design and first milestone are approved
 
 ## 1. Purpose
 
-Evolve the current single-supervisor coding pipeline into a generic delivery
-harness that can coordinate large outcomes across software, legal-document,
-research, operations, and other domains.
+Build a generic production delivery system that can coordinate large outcomes
+across software, legal-document, research, operations, and other domains.
 
 The harness must:
 
@@ -26,14 +25,13 @@ The intended model is not specific to source code. A "deliverable" may be a
 module, a test suite, a contract, a policy, a filing package, a research report,
 or an assembled operating handbook.
 
-## 2. Problem in the Current Harness
+## 2. Problem to Solve
 
-The current harness has strong controls for a small or already well-understood
-coding change:
+A simple agent pipeline can handle a small or already well-understood change:
 
 ```text
 request -> investigator -> optional design worker -> task packets
-        -> coding worker -> supervisor verification -> optional reviewer
+        -> domain worker -> local verification -> optional reviewer
 ```
 
 Its leaf-task discipline should be retained. The weak point is before and after
@@ -50,8 +48,9 @@ the leaf task:
    invalidation being recorded.
 7. Existing fields such as `ENTRY_SYMBOLS` and `ACCEPTANCE_COMMANDS` assume a
    software repository and do not generalize to documents or human approvals.
-8. The supervisor owns too many kinds of judgment: routing, design escalation,
-   packet validation, execution, integration, failure recovery, and completion.
+8. A single orchestrator agent owns too many kinds of judgment: routing, design
+   escalation, packet validation, execution, integration, failure recovery, and
+   completion.
 
 The goal is therefore to add a design and planning control plane around the
 existing worker loop, not to make implementation workers more powerful.
@@ -92,7 +91,8 @@ on the same policy, interface, or foundational deliverable.
 
 Recursion is orchestrated, not nested at runtime. The coordinator invokes a
 fresh planner on one oversized node, records its children, and repeats until all
-executable nodes meet the leaf criteria. Subagents never spawn other subagents.
+executable nodes meet the leaf criteria. Runtime nodes never create new
+executable topologies or grant new authority.
 
 ### 3.3 Leaf criteria
 
@@ -696,8 +696,7 @@ change-control model.
 
 Changes:
 
-- create a separate Python production package; do not modify the existing `.pi`
-  prompts or agents;
+- create the Python production package and its deterministic runtime boundaries;
 - define versioned schemas for every authoritative record and proposal;
 - implement the fixed LangGraph control graph, durable checkpointer, state
   repository, artifact repository, and authenticated approval boundary;
@@ -786,9 +785,8 @@ production/
     adversarial/             # scope escape, stale state, unsafe proposal tests
 ```
 
-The existing `.pi` configuration remains unchanged on `master` as the
-development harness. It may later be used as a prompt and role-prototype source,
-but production behavior must be defined and tested in the Python package.
+Production behavior is defined and tested entirely in this package. External
+prompt experiments or development harnesses are not runtime dependencies.
 
 ## 13. Design Questions for the Next Iteration
 
