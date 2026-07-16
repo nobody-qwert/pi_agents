@@ -86,6 +86,11 @@ commit per independently verified packet with a `Work-Packet: NNN` trailer.
 Those trailers make the process resumable: rerunning the command skips committed
 packets and continues at the first unfinished packet.
 
+For reproducible unattended runs, personal `~/.codex/config.toml` settings are
+ignored by default; saved Codex authentication is still used. Pass
+`--use-user-config` only when the global configuration is valid and intentionally
+required by the packet workers.
+
 Preview the sequence without making changes:
 
 ```bash

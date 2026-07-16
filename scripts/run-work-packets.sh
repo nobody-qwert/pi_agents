@@ -14,6 +14,7 @@ FROM_PACKET=001
 TO_PACKET=999
 MAX_REPAIRS=2
 DRY_RUN=false
+IGNORE_USER_CONFIG=true
 
 usage() {
   cat <<'EOF'
@@ -25,6 +26,7 @@ Options:
   --from NNN          Start at packet NNN (default: 001).
   --to NNN            Stop after packet NNN (default: last packet).
   --max-repairs N     Maximum repair attempts per packet (default: 2).
+  --use-user-config   Load ~/.codex/config.toml instead of isolated defaults.
   --dry-run           Print the packets that would run without changing anything.
   -h, --help          Show this help.
 
@@ -73,6 +75,10 @@ while (($# > 0)); do
       ;;
     --dry-run)
       DRY_RUN=true
+      shift
+      ;;
+    --use-user-config)
+      IGNORE_USER_CONFIG=false
       shift
       ;;
     -h|--help)
@@ -147,6 +153,11 @@ mkdir -p "$RUN_DIR"
 
 log "Serial run $RUN_ID started on branch $INITIAL_BRANCH"
 log "Logs: $RUN_DIR"
+if $IGNORE_USER_CONFIG; then
+  log "Personal Codex config: ignored (saved authentication remains available)"
+else
+  log "Personal Codex config: enabled"
+fi
 
 assert_repository_control_unchanged() {
   local expected_head=$1
@@ -186,17 +197,25 @@ run_agent() {
   local prompt=$4
   local result_file=$5
   local phase_dir
+  local -a codex_command
   phase_dir=$(dirname "$result_file")
   mkdir -p "$phase_dir"
 
+  codex_command=(
+    "$CODEX_BIN" exec
+    --ephemeral
+    --sandbox "$sandbox"
+    -C "$ROOT"
+    --output-schema "$RESULT_SCHEMA"
+    --output-last-message "$result_file"
+  )
+  if $IGNORE_USER_CONFIG; then
+    codex_command+=(--ignore-user-config)
+  fi
+  codex_command+=("$prompt")
+
   log "Packet $packet_id: starting fresh $phase context"
-  if ! "$CODEX_BIN" exec \
-    --ephemeral \
-    --sandbox "$sandbox" \
-    -C "$ROOT" \
-    --output-schema "$RESULT_SCHEMA" \
-    --output-last-message "$result_file" \
-    "$prompt" \
+  if ! "${codex_command[@]}" \
     >"$phase_dir/$phase.stdout.log" \
     2>"$phase_dir/$phase.stderr.log"; then
     die "Packet $packet_id $phase process failed. See $phase_dir/$phase.stderr.log"
