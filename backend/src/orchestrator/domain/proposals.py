@@ -16,6 +16,7 @@ from orchestrator.domain.primitives import (
     EvidenceResult,
     NonEmptyStr,
     ProposalId,
+    RelativePath,
     RunId,
     ShortStr,
     StrictDomainModel,
@@ -38,6 +39,20 @@ class SubmissionContext(StrictDomainModel):
     design_version: DesignVersion
 
 
+class LeafReadinessClaim(StrictDomainModel):
+    """Explicit planner claims for leaf criteria that cannot be inferred safely."""
+
+    observable_outcome: bool
+    single_responsibility: bool
+    inputs_explicit: bool
+    outputs_explicit: bool
+    design_rules_and_interfaces_cited: bool
+    single_verification_boundary: bool
+    failure_isolated: bool
+    context_fits: bool
+    no_unapproved_decisions: bool
+
+
 class WorkNodeProposal(StrictDomainModel):
     work_node_id: WorkNodeId
     parent_id: WorkNodeId | None = None
@@ -48,8 +63,14 @@ class WorkNodeProposal(StrictDomainModel):
     depends_on: tuple[WorkNodeId, ...] = ()
     inputs: tuple[ArtifactId, ...] = ()
     expected_outputs: tuple[ShortStr, ...]
+    output_consumer_ids: tuple[WorkNodeId, ...] = ()
     interfaces: tuple[NonEmptyStr, ...] = ()
+    produces_interfaces: tuple[ShortStr, ...] = ()
+    consumes_interfaces: tuple[ShortStr, ...] = ()
     acceptance_criterion_ids: tuple[CriterionId, ...]
+    expected_touch_points: tuple[RelativePath, ...] = ()
+    non_blocking_dependencies: tuple[WorkNodeId, ...] = ()
+    leaf_readiness: LeafReadinessClaim | None = None
 
 
 class ProposedWorkPlan(StrictDomainModel):
