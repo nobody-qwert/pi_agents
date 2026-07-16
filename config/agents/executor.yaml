@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: executor
+display_name: Domain Worker
+description: Produces one bounded artifact outcome from one immutable task packet.
+prompt_ref: prompts/executor.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.1
+  max_output_tokens: 8000
+execution:
+  timeout_seconds: 300
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: WorkNodeRecord
+output_schema: WorkReport
+authority:
+  can_mutate_artifacts: true
+visibility:
+  expose_prompt_to_operator: true

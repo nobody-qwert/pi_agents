@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: outcome-verifier
+display_name: Outcome Verifier
+description: Produces criterion-by-criterion outcome evidence without inferring missing criteria.
+prompt_ref: prompts/outcome-verifier.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.0
+  max_output_tokens: 6000
+execution:
+  timeout_seconds: 210
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: WorkReport
+output_schema: OutcomeEvidence
+authority:
+  can_verify_outcome: true
+visibility:
+  expose_prompt_to_operator: true

@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: issue-triager
+display_name: Issue Triager
+description: Classifies one issue and its impact set without performing the repair.
+prompt_ref: prompts/issue-triager.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.0
+  max_output_tokens: 4000
+execution:
+  timeout_seconds: 150
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: VerificationReport
+output_schema: IssueReport
+authority:
+  can_triage: true
+visibility:
+  expose_prompt_to_operator: true

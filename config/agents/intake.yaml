@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: intake
+display_name: Intake Analyst
+description: Drafts the charter and identifies exact user-owned authority questions.
+prompt_ref: prompts/intake.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.1
+  max_output_tokens: 4000
+execution:
+  timeout_seconds: 120
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: CharterRecord
+output_schema: WorkReport
+authority:
+  can_propose_charter: true
+visibility:
+  expose_prompt_to_operator: true

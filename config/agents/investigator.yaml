@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: investigator
+display_name: Current-State Investigator
+description: Reports existing ownership, constraints, evidence, and gaps without choosing architecture.
+prompt_ref: prompts/investigator.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.1
+  max_output_tokens: 5000
+execution:
+  timeout_seconds: 180
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: CharterRecord
+output_schema: WorkReport
+authority:
+  can_investigate_current_state: true
+visibility:
+  expose_prompt_to_operator: true

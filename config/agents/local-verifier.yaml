@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: local-verifier
+display_name: Local Verifier
+description: Independently checks a bounded output and reports pass, fail, or an evidence gap.
+prompt_ref: prompts/local-verifier.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.0
+  max_output_tokens: 5000
+execution:
+  timeout_seconds: 180
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: WorkReport
+output_schema: VerificationReport
+authority:
+  can_verify_local: true
+visibility:
+  expose_prompt_to_operator: true

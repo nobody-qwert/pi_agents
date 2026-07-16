@@ -1,0 +1,22 @@
+schema_version: 1
+agent_id: integrator
+display_name: Integrator
+description: Assembles independently verified sibling outputs against their declared interfaces.
+prompt_ref: prompts/integrator.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.1
+  max_output_tokens: 7000
+execution:
+  timeout_seconds: 240
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: VerificationReport
+output_schema: WorkReport
+authority:
+  can_mutate_artifacts: true
+  can_integrate: true
+visibility:
+  expose_prompt_to_operator: true

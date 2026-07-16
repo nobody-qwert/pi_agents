@@ -1,0 +1,21 @@
+schema_version: 1
+agent_id: design-critic
+display_name: Design Critic
+description: Independently identifies contradictions and uncovered criteria in a proposed design.
+prompt_ref: prompts/design-critic.md
+model:
+  provider: lm-studio
+  model: qwen3.6-27b
+  temperature: 0.0
+  max_output_tokens: 4000
+execution:
+  timeout_seconds: 150
+  max_attempts: 2
+  allow_parallel: false
+tools: []
+input_schema: DesignProposal
+output_schema: VerificationReport
+authority:
+  can_recommend_design_acceptance: true
+visibility:
+  expose_prompt_to_operator: true
