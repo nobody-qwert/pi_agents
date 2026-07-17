@@ -23,7 +23,13 @@ from orchestrator.domain.authoritative import (
     WorkNodeRecord,
     WorkspaceRecord,
 )
-from orchestrator.domain.events import EventEnvelope, EventStatus, EventType
+from orchestrator.domain.events import (
+    EventDetail,
+    EventDraft,
+    EventEnvelope,
+    EventStatus,
+    EventType,
+)
 from orchestrator.domain.primitives import (
     AcceptanceCriterion,
     ActorId,
@@ -44,6 +50,7 @@ from orchestrator.domain.primitives import (
     CompletionId,
     ControlStage,
     ConversationId,
+    CorrelationId,
     CriterionId,
     CriterionResult,
     DesignReference,
@@ -57,6 +64,7 @@ from orchestrator.domain.primitives import (
     IssueClassification,
     IssueId,
     PacketId,
+    PacketVersion,
     PromotionId,
     PromotionStatus,
     ProposalId,
@@ -148,6 +156,7 @@ __all__ = [
     "CompletionProposal",
     "ControlStage",
     "ConversationId",
+    "CorrelationId",
     "CriterionId",
     "CriterionResult",
     "DesignDecision",
@@ -156,6 +165,8 @@ __all__ = [
     "DesignRevision",
     "DesignRevisionId",
     "DesignVersion",
+    "EventDetail",
+    "EventDraft",
     "EventEnvelope",
     "EventId",
     "EventStatus",
@@ -178,6 +189,7 @@ __all__ = [
     "PacketAcceptanceCriterion",
     "PacketId",
     "PacketRecord",
+    "PacketVersion",
     "PromotionId",
     "PromotionRecord",
     "PromotionStatus",

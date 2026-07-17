@@ -60,6 +60,7 @@ UtcTimestamp = Annotated[datetime, AwareDatetime(), AfterValidator(_as_utc)]
 SchemaVersion = Literal[1]
 RecordVersion = Annotated[int, Field(ge=1)]
 DesignVersion = Annotated[int, Field(ge=1)]
+PacketVersion = Annotated[int, Field(ge=1)]
 ArtifactVersion = Annotated[int, Field(ge=1)]
 SequenceNumber = Annotated[int, Field(ge=1)]
 
@@ -129,6 +130,10 @@ AttemptId = Annotated[
 EventId = Annotated[
     str, StringConstraints(pattern=r"^evt_[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 ]
+# A correlation ID is deliberately opaque to the domain.  Trace and span IDs
+# retain their OpenTelemetry-specific validation below; this ID also links an
+# event to a command or cross-service workflow when no trace backend is present.
+CorrelationId = ShortStr
 ActorId = Annotated[
     str,
     StringConstraints(

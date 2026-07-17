@@ -8,13 +8,21 @@ from orchestrator.persistence.ports import (
     RepositoryConstraintError,
     RepositoryUnitOfWork,
 )
-from orchestrator.persistence.postgres import PostgresUnitOfWork
+from orchestrator.persistence.postgres import (
+    EventConflictError,
+    EventNotFoundError,
+    PostgresRunEventRepository,
+    PostgresUnitOfWork,
+)
 
 __all__ = [
     "AuthoritativeRepository",
     "ConcurrentWriteError",
     "DuplicateIdempotencyKeyError",
     "DuplicateRecordError",
+    "EventConflictError",
+    "EventNotFoundError",
+    "PostgresRunEventRepository",
     "PostgresUnitOfWork",
     "RepositoryConstraintError",
     "RepositoryUnitOfWork",

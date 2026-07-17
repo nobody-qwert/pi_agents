@@ -29,13 +29,25 @@ def postgres_database_url() -> str:
 
 @pytest.fixture(scope="session")
 def migrated_postgres_database(postgres_database_url: str) -> Iterator[str]:
-    """Recreate the explicitly designated test database at the migration head."""
+    """Build the explicitly designated test schema from migrations alone."""
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", postgres_database_url)
-    command.downgrade(config, "base")
-    command.upgrade(config, "head")
-    yield postgres_database_url
-    command.downgrade(config, "base")
+
+    def reset_schema() -> None:
+        engine = create_engine(postgres_database_url)
+        try:
+            with engine.begin() as connection:
+                connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+                connection.execute(text("CREATE SCHEMA public"))
+        finally:
+            engine.dispose()
+
+    reset_schema()
+    try:
+        command.upgrade(config, "head")
+        yield postgres_database_url
+    finally:
+        reset_schema()
 
 
 @pytest.fixture

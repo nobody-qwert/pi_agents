@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from pydantic import ValidationError
@@ -11,12 +11,14 @@ from pydantic import ValidationError
 from orchestrator.domain import (
     ArtifactRecord,
     AuthenticatedActor,
+    EventDraft,
     RecordMetadata,
     RunRecord,
 )
 from orchestrator.persistence import ConcurrentWriteError
 from orchestrator.persistence.postgres import (
     PostgresAuthoritativeRepository,
+    PostgresRunEventRepository,
     _RepositoryDefinition,
 )
 
@@ -119,3 +121,39 @@ def test_compare_and_swap_requires_the_next_record_version() -> None:
         repository.compare_and_swap(replacement, expected_record_version=1)
 
     connection.execute.assert_not_called()
+
+
+def test_event_sequence_allocation_advances_the_run_record_version() -> None:
+    connection = MagicMock()
+    connection.execute.return_value.scalar.side_effect = [None, 1]
+    repository = PostgresRunEventRepository(connection)
+    draft = EventDraft(
+        event_id="evt_record_version",
+        run_id="run_record_version",
+        conversation_id="conv_record_version",
+        occurred_at=datetime(2026, 7, 17, 8, tzinfo=UTC),
+        type="transition.applied",
+        stage="INTAKE",
+        node_id="event-service",
+        attempt_id="attempt_record_version",
+        design_version=1,
+        packet_version=1,
+        actor_role="event-service",
+        status="accepted",
+        outcome="accepted",
+        summary="Allocate an event sequence with a versioned run update",
+        detail_ref="/api/v1/runs/run_record_version/events/evt_record_version/detail",
+        correlation_id="command-record-version",
+        trace_id="0123456789abcdef0123456789abcdef",
+        span_id="0123456789abcdef",
+        command_idempotency_key="command:record-version",
+    )
+
+    repository.append(draft)
+
+    allocation = connection.execute.call_args_list[1].args[0]
+    assert "next_event_sequence = next_event_sequence + 1" in allocation.text
+    assert "record_version = record_version + 1" in allocation.text
+    assert "updated_at = stamp.value" in allocation.text
+    assert "'record_version', record_version + 1" in allocation.text
+    assert "'updated_at', stamp.value" in allocation.text

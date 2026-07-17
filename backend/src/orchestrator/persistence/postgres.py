@@ -29,6 +29,7 @@ from orchestrator.domain.authoritative import (
     WorkNodeRecord,
     WorkspaceRecord,
 )
+from orchestrator.domain.events import EventDetail, EventDraft, EventEnvelope
 from orchestrator.domain.primitives import IdempotencyKey, RecordVersion
 from orchestrator.persistence.ports import (
     AuthoritativeRepository,
@@ -153,6 +154,185 @@ class PostgresAuthoritativeRepository[RecordT: AuthoritativeRecord]:
             )
 
 
+class EventNotFoundError(Exception):
+    """A durable event or its owning run does not exist."""
+
+
+class EventConflictError(Exception):
+    """An event identifier conflicts with a different originating command."""
+
+
+class PostgresRunEventRepository:
+    """Transaction-bound storage for ordered audit event projections."""
+
+    def __init__(self, connection: Connection) -> None:
+        self._connection = connection
+
+    def get_by_command_idempotency_key(
+        self, *, run_id: str, command_idempotency_key: IdempotencyKey
+    ) -> EventEnvelope | None:
+        payload = self._connection.execute(
+            text(
+                "SELECT payload FROM run_events "
+                "WHERE run_id = :run_id "
+                "AND command_idempotency_key = :command_idempotency_key"
+            ),
+            {
+                "run_id": run_id,
+                "command_idempotency_key": command_idempotency_key,
+            },
+        ).scalar()
+        return _decode_event_envelope(payload) if payload is not None else None
+
+    def reserve_command(
+        self, *, run_id: str, command_idempotency_key: IdempotencyKey
+    ) -> bool:
+        """Atomically reserve a command before its state transition runs.
+
+        PostgreSQL waits for a concurrent insert of the same unique key to
+        finish.  Thus exactly one transaction receives ``True`` and may run
+        the authoritative state change; a retry receives ``False`` only after
+        the winning transaction has committed its event.  Different command
+        keys do not contend here, including keys for the same run.
+        """
+        reserved_run_id = self._connection.execute(
+            text(
+                "INSERT INTO run_event_commands "
+                "(run_id, command_idempotency_key) "
+                "VALUES (:run_id, :command_idempotency_key) "
+                "ON CONFLICT DO NOTHING "
+                "RETURNING run_id"
+            ),
+            {
+                "run_id": run_id,
+                "command_idempotency_key": command_idempotency_key,
+            },
+        ).scalar()
+        return reserved_run_id is not None
+
+    def append(self, draft: EventDraft) -> EventEnvelope:
+        """Persist one event with a locked, monotonically allocated sequence."""
+        existing = self.get_by_command_idempotency_key(
+            run_id=draft.run_id,
+            command_idempotency_key=draft.command_idempotency_key,
+        )
+        if existing is not None:
+            return existing
+
+        sequence = self._connection.execute(
+            text(
+                "WITH stamp AS (SELECT clock_timestamp() AS value) "
+                "UPDATE runs "
+                "SET next_event_sequence = next_event_sequence + 1, "
+                "record_version = record_version + 1, "
+                "updated_at = stamp.value, "
+                "payload = jsonb_set("
+                "payload, '{metadata}', "
+                "COALESCE(payload -> 'metadata', '{}'::jsonb) "
+                "|| jsonb_build_object("
+                "'record_version', record_version + 1, "
+                "'updated_at', stamp.value"
+                "), true) "
+                "FROM stamp "
+                "WHERE run_id = :run_id "
+                "RETURNING next_event_sequence - 1"
+            ),
+            {"run_id": draft.run_id},
+        ).scalar()
+        if sequence is None:
+            raise EventNotFoundError(f"run {draft.run_id!r} does not exist")
+
+        envelope = draft.envelope(cast(int, sequence))
+        values = {
+            "event_id": envelope.event_id,
+            "run_id": envelope.run_id,
+            "sequence": envelope.sequence,
+            "event_type": envelope.type,
+            "occurred_at": envelope.occurred_at,
+            "attempt_id": envelope.attempt_id,
+            "design_version": envelope.design_version,
+            "packet_version": envelope.packet_version,
+            "actor_role": envelope.actor_role,
+            "outcome": envelope.outcome,
+            "correlation_id": envelope.correlation_id,
+            "trace_id": envelope.trace_id,
+            "span_id": envelope.span_id,
+            "payload": json.dumps(
+                envelope.model_dump(mode="json"), separators=(",", ":")
+            ),
+            "command_idempotency_key": draft.command_idempotency_key,
+            "transition_id": draft.transition_id,
+            "inline_detail": (
+                json.dumps(draft.inline_detail, separators=(",", ":"))
+                if draft.inline_detail is not None
+                else None
+            ),
+            "detail_ref": envelope.detail_ref,
+        }
+        try:
+            with self._connection.begin_nested():
+                self._connection.execute(
+                    text(
+                        "INSERT INTO run_events ("
+                        "event_id, run_id, sequence, event_type, occurred_at, "
+                        "attempt_id, design_version, packet_version, actor_role, outcome, "
+                        "correlation_id, trace_id, span_id, payload, "
+                        "command_idempotency_key, transition_id, inline_detail, detail_ref"
+                        ") VALUES ("
+                        ":event_id, :run_id, :sequence, :event_type, :occurred_at, "
+                        ":attempt_id, :design_version, :packet_version, :actor_role, "
+                        ":outcome, :correlation_id, :trace_id, :span_id, CAST(:payload AS jsonb), "
+                        ":command_idempotency_key, "
+                        ":transition_id, CAST(:inline_detail AS jsonb), :detail_ref"
+                        ")"
+                    ),
+                    values,
+                )
+        except IntegrityError as error:
+            existing = self.get_by_command_idempotency_key(
+                run_id=draft.run_id,
+                command_idempotency_key=draft.command_idempotency_key,
+            )
+            if existing is not None:
+                return existing
+            raise EventConflictError(
+                f"event {draft.event_id!r} conflicts with a different command"
+            ) from error
+        return envelope
+
+    def replay(self, *, run_id: str, after_sequence: int) -> tuple[EventEnvelope, ...]:
+        rows = self._connection.execute(
+            text(
+                "SELECT payload FROM run_events "
+                "WHERE run_id = :run_id AND sequence > :after_sequence "
+                "ORDER BY sequence ASC, event_id ASC"
+            ),
+            {"run_id": run_id, "after_sequence": after_sequence},
+        )
+        return tuple(_decode_event_envelope(row[0]) for row in rows)
+
+    def detail(self, *, event_id: str) -> EventDetail:
+        row = self._connection.execute(
+            text(
+                "SELECT detail_ref, inline_detail FROM run_events "
+                "WHERE event_id = :event_id"
+            ),
+            {"event_id": event_id},
+        ).one_or_none()
+        if row is None:
+            raise EventNotFoundError(f"event {event_id!r} does not exist")
+        return EventDetail.model_validate_json(
+            json.dumps(
+                {
+                    "event_id": event_id,
+                    "detail_ref": row.detail_ref,
+                    "inline_detail": row.inline_detail,
+                },
+                separators=(",", ":"),
+            )
+        )
+
+
 class PostgresUnitOfWork:
     """Creates repository adapters bound to one explicit PostgreSQL transaction."""
 
@@ -253,6 +433,11 @@ class PostgresUnitOfWork:
     def run_completions(self) -> PostgresAuthoritativeRepository[RunCompletionRecord]:
         return self._repository("run_completions", RunCompletionRecord)
 
+    @property
+    def events(self) -> PostgresRunEventRepository:
+        """Expose event operations only while the caller owns the transaction."""
+        return PostgresRunEventRepository(self._require_connection())
+
     def _repository[RecordT: AuthoritativeRecord](
         self, attribute: str, model_type: type[RecordT]
     ) -> PostgresAuthoritativeRepository[RecordT]:
@@ -305,6 +490,11 @@ def _decode_stored_record[RecordT: AuthoritativeRecord](
     """
     serialized_payload = json.dumps(payload, allow_nan=False, separators=(",", ":"))
     return model_type.model_validate_json(serialized_payload)
+
+
+def _decode_event_envelope(payload: Any) -> EventEnvelope:
+    serialized_payload = json.dumps(payload, allow_nan=False, separators=(",", ":"))
+    return EventEnvelope.model_validate_json(serialized_payload)
 
 
 def _is_duplicate_identifier(error: IntegrityError, table_name: str) -> bool:
