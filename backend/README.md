@@ -35,6 +35,17 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
+To probe the real configured LM Studio server (rather than the mocked gateway
+boundary used by unit tests), explicitly enable its integration check:
+
+```bash
+RUN_LM_STUDIO_INTEGRATION=1 uv run pytest tests/integration/test_lm_studio_gateway.py
+```
+
+The command uses the required `APP_*` and `LM_STUDIO_*` environment settings
+shown above. It succeeds only when the configured model ID is present in LM
+Studio's `/v1/models` response.
+
 To verify the installed package directly:
 
 ```bash

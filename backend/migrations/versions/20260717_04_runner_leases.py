@@ -28,13 +28,17 @@ def upgrade() -> None:
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_attempts", sa.Integer(), nullable=False),
-        sa.Column("cancellation_requested_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "cancellation_requested_at", sa.DateTime(timezone=True), nullable=True
+        ),
         sa.Column("budget_exhausted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["run_id"], ["runs.run_id"]),
-        sa.CheckConstraint("attempt_count >= 0", name="run_queue_attempt_count_nonnegative"),
+        sa.CheckConstraint(
+            "attempt_count >= 0", name="run_queue_attempt_count_nonnegative"
+        ),
         sa.CheckConstraint("max_attempts >= 1", name="run_queue_max_attempts_positive"),
         sa.CheckConstraint(
             "attempt_count <= max_attempts", name="run_queue_attempt_count_bounded"
