@@ -15,7 +15,7 @@ export async function postJson<T>(path: string, body: unknown, schema: z.ZodType
   if (!response.ok) { const parsed = errorSchema.safeParse(data); throw new ApiError(parsed.success ? parsed.data.code : "api_request_failed"); }
   return schema.parse(data);
 }
-export const projectSchema = z.object({ project_id: z.string(), display_name: z.string() });
+export const projectSchema = z.object({ project_id: z.string(), display_name: z.string(), source_fingerprint: z.string(), file_count: z.number(), included_bytes: z.number(), excluded_paths: z.array(z.string()), protected_paths: z.array(z.string()), git_head: z.string().nullable(), git_dirty: z.boolean().nullable() });
 export const projectsSchema = z.object({ projects: z.array(projectSchema) });
 
 export const agentSchema = z.object({
@@ -52,3 +52,9 @@ export const eventDetailSchema = z.object({
 export type Run = z.infer<typeof runSchema>;
 export type RunEvent = z.infer<typeof runEventSchema>;
 export type EventDetail = z.infer<typeof eventDetailSchema>;
+export const workspaceSchema = z.object({ workspace_id: z.string(), run_id: z.string(), project_id: z.string(), source_fingerprint: z.string(), excluded_paths: z.array(z.string()), protected_paths: z.array(z.string()), guest_path: z.string().optional() });
+export const checkpointSchema = z.object({ checkpoint_id: z.string(), kind: z.string(), commit_hash: z.string(), tree_hash: z.string(), parent_checkpoint_id: z.string().nullable(), rollback_from_checkpoint_id: z.string().nullable().optional() });
+export const checkpointsSchema = z.object({ current_checkpoint_id: z.string().nullable(), checkpoints: z.array(checkpointSchema) });
+export const desktopSchema = z.object({ session_id: z.string(), expires_at: z.string(), websocket_url: z.string(), input_owner: z.enum(["AGENT", "USER", "PAUSED"]), previews: z.array(z.object({ label: z.string(), url: z.string() })) });
+export type Workspace = z.infer<typeof workspaceSchema>;
+export type Checkpoint = z.infer<typeof checkpointSchema>;
