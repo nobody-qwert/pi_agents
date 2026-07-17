@@ -37,9 +37,10 @@ Before starting the Compose stack:
 4. Confirm the served model ID and set `LM_STUDIO_MODEL_ID` when it differs from
    `qwen3.6-27b`.
 
-The main application on this branch is still a design target, not a runnable
-implementation. `sample_disposable_vm/` is a reference VM-manager prototype;
-it is not yet integrated into the production Compose topology described here.
+The repository now contains the backend, React operator UI, and a local Compose
+foundation. The disposable-VM manager remains a separately verified boundary:
+the reference in `sample_disposable_vm/` is not a substitute for a KVM-enabled
+end-to-end deployment.
 
 ## Documents
 
@@ -70,8 +71,22 @@ The web application should then be available at `http://localhost:3000`, with
 the API health endpoint at `http://localhost:8000/health` and the local
 observability dashboard at `http://localhost:3001`.
 
-Exact commands and ports remain design targets until the Dockerized vertical
-slice is implemented and verified.
+The local Compose definition exposes web on port 3000, API on port 8000, and
+Grafana on port 3001. Create an allowlisted `./projects/` directory and copy
+the example settings before startup:
+
+```bash
+mkdir -p projects
+cp .env.example .env
+docker compose config --quiet
+docker compose up --build
+```
+
+The full real-model/guest acceptance profile additionally requires a reachable
+LM Studio server with `qwen3.6-27b`, PostgreSQL integration configuration, and
+KVM guest prerequisites. Those environment-dependent tests are intentionally
+reported as skipped when their prerequisites are absent; they are not a passing
+end-to-end result.
 
 ## Work-packet implementation
 
