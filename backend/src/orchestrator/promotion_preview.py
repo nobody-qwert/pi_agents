@@ -72,6 +72,12 @@ class PromotionPreviewService:
         self._now = now or (lambda: datetime.now(UTC))
         self._previews: dict[str, PromotionPreview] = {}
 
+    def get(self, preview_hash: str) -> PromotionPreview:
+        try:
+            return self._previews[preview_hash]
+        except KeyError as error:
+            raise PromotionPreviewError("unknown_preview") from error
+
     def preview(
         self,
         *,

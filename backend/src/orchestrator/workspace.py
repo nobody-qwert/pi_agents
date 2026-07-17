@@ -36,6 +36,7 @@ class TransferManifestEntry:
 class WorkspaceImport:
     workspace_id: str
     run_id: str
+    project_id: str
     guest_id: str
     guest_path: str
     source_fingerprint: str
@@ -137,6 +138,7 @@ class WorkspaceImportService:
         imported = WorkspaceImport(
             workspace_id=workspace_id,
             run_id=run_id,
+            project_id=project_id,
             guest_id=guest.guest_id,
             guest_path=guest_path,
             source_fingerprint=snapshot.source_fingerprint,
