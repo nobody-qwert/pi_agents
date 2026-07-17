@@ -32,6 +32,26 @@ class ProjectPreview:
     git_dirty: bool | None
 
 
+@dataclass(frozen=True, slots=True)
+class ProjectFile:
+    """One trusted, sanitized file payload for a subsequent import."""
+
+    relative_path: str
+    content: bytes
+    sha256: str
+    executable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectSnapshot:
+    """A verified source snapshot with no host path exposed to its consumer."""
+
+    project_id: str
+    source_fingerprint: str
+    files: tuple[ProjectFile, ...]
+    excluded_paths: tuple[str, ...]
+
+
 class ProjectCatalog:
     """Only opaque catalog IDs cross the application/model boundary.
 
@@ -86,11 +106,46 @@ class ProjectCatalog:
                 raise ProjectPolicyError("unreadable_project_root") from error
         raise ProjectPolicyError("unknown_project_id")
 
+    def snapshot(
+        self, project_id: str, *, expected_source_fingerprint: str
+    ) -> ProjectSnapshot:
+        """Return sanitized bytes only when the selected source remains unchanged."""
+        source = self.resolve(project_id)
+        files, excluded = self._collect_files(source)
+        fingerprint = self._fingerprint(files)
+        if fingerprint != expected_source_fingerprint:
+            raise ProjectPolicyError("source_fingerprint_changed")
+        return ProjectSnapshot(
+            project_id=project_id,
+            source_fingerprint=fingerprint,
+            files=tuple(files),
+            excluded_paths=tuple(sorted(excluded)),
+        )
+
     def _preview_path(self, source: Path) -> ProjectPreview:
         source = self._canonical_project(source)
-        included: list[tuple[str, bytes]] = []
-        excluded: list[str] = []
+        included, excluded = self._collect_files(source)
+        fingerprint = self._fingerprint(included)
+        git_head, git_dirty = self._git_info(source)
+        return ProjectPreview(
+            project_id=self._project_id(source),
+            display_name=source.name,
+            source_fingerprint=fingerprint,
+            file_count=len(included),
+            included_bytes=sum(len(file.content) for file in included),
+            excluded_paths=tuple(sorted(excluded)),
+            protected_paths=tuple(
+                file.relative_path
+                for file in included
+                if file.relative_path in _PROTECTED_PATHS
+            ),
+            git_head=git_head,
+            git_dirty=git_dirty,
+        )
 
+    def _collect_files(self, source: Path) -> tuple[list[ProjectFile], list[str]]:
+        included: list[ProjectFile] = []
+        excluded: list[str] = []
         try:
             for directory, dirnames, filenames in os.walk(
                 source, topdown=True, followlinks=False
@@ -112,36 +167,31 @@ class ProjectCatalog:
                     if path.is_symlink() or self._excluded(relative):
                         excluded.append(relative.as_posix())
                         continue
+                    content = self._read_regular_file(path)
                     included.append(
-                        (relative.as_posix(), self._read_regular_file(path))
+                        ProjectFile(
+                            relative_path=relative.as_posix(),
+                            content=content,
+                            sha256=hashlib.sha256(content).hexdigest(),
+                            executable=bool(
+                                path.stat(follow_symlinks=False).st_mode & 0o111
+                            ),
+                        )
                     )
         except OSError as error:
             raise ProjectPolicyError("unreadable_project_path") from error
-
-        # Re-resolving detects replacement of the selected project directory while
-        # it was inspected; an importer must never accept such a preview.
         if self._canonical_project(source) != source:
             raise ProjectPolicyError("project_changed_during_inspection")
+        return included, excluded
 
+    @staticmethod
+    def _fingerprint(files: list[ProjectFile]) -> str:
         fingerprint = hashlib.sha256()
-        for relative_path, content in included:
-            fingerprint.update(relative_path.encode("utf-8"))
+        for file in files:
+            fingerprint.update(file.relative_path.encode("utf-8"))
             fingerprint.update(b"\0")
-            fingerprint.update(hashlib.sha256(content).digest())
-        git_head, git_dirty = self._git_info(source)
-        return ProjectPreview(
-            project_id=self._project_id(source),
-            display_name=source.name,
-            source_fingerprint=fingerprint.hexdigest(),
-            file_count=len(included),
-            included_bytes=sum(len(content) for _, content in included),
-            excluded_paths=tuple(sorted(excluded)),
-            protected_paths=tuple(
-                relative for relative, _ in included if relative in _PROTECTED_PATHS
-            ),
-            git_head=git_head,
-            git_dirty=git_dirty,
-        )
+            fingerprint.update(bytes.fromhex(file.sha256))
+        return fingerprint.hexdigest()
 
     def _canonical_project(self, source: Path) -> Path:
         if source.is_symlink():
