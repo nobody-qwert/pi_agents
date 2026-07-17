@@ -8,7 +8,7 @@ from pydantic import Field, model_validator
 
 from orchestrator.domain.primitives import (
     AcceptanceCriterion,
-    ActorRef,
+    ActorReference,
     ApprovalDecision,
     ApprovalId,
     ArtifactId,
@@ -211,7 +211,7 @@ class ArtifactRecord(AuthoritativeRecord):
     media_type: ShortStr
     storage_locator: NonEmptyStr
     sha256: Sha256Digest
-    producer: ActorRef
+    producer: ActorReference
     access_policy: tuple[ShortStr, ...]
 
 
@@ -224,7 +224,7 @@ class EvidenceRecord(AuthoritativeRecord):
     result: EvidenceResult
     summary: NonEmptyStr
     supporting_artifacts: tuple[ArtifactPointer, ...] = ()
-    verifier: ActorRef
+    verifier: ActorReference
     design_version: DesignVersion
 
 
@@ -232,7 +232,7 @@ class IssueRecord(AuthoritativeRecord):
     kind: Literal["issue_record"] = "issue_record"
     issue_id: IssueId
     run_id: RunId
-    reporter: ActorRef
+    reporter: ActorReference
     affected_work_node_ids: tuple[WorkNodeId, ...]
     affected_artifact_ids: tuple[ArtifactId, ...] = ()
     observed_evidence: NonEmptyStr
@@ -266,7 +266,7 @@ class WorkspaceRecord(AuthoritativeRecord):
     guest_identity: ShortStr
     guest_path: RelativePath
     status: WorkspaceStatus
-    input_owner: ActorRef | None = None
+    input_owner: ActorReference | None = None
 
 
 class CheckpointRecord(AuthoritativeRecord):
@@ -280,7 +280,7 @@ class CheckpointRecord(AuthoritativeRecord):
     accepted_evidence_ids: tuple[EvidenceId, ...]
     parent_checkpoint_id: CheckpointId | None = None
     rollback_from_checkpoint_id: CheckpointId | None = None
-    recorded_by: ActorRef
+    recorded_by: ActorReference
 
 
 class PromotionRecord(AuthoritativeRecord):
@@ -310,7 +310,7 @@ class TransitionRecord(AuthoritativeRecord):
     previous_state: TransitionState
     next_state: TransitionState
     reason: NonEmptyStr
-    actor: ActorRef
+    actor: ActorReference
     previous_record_version: int = Field(ge=1)
     next_record_version: int = Field(ge=2)
 
@@ -321,6 +321,6 @@ class RunCompletionRecord(AuthoritativeRecord):
     run_id: RunId
     outcome_evidence_ids: tuple[EvidenceId, ...]
     completed_at: UtcTimestamp
-    completed_by: ActorRef
+    completed_by: ActorReference
     authority: AuthorityGrant
     summary: NonEmptyStr

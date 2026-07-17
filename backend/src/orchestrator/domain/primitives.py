@@ -264,6 +264,11 @@ class AgentActor(ActorRef):
     kind: Literal["agent"]
 
 
+# Keep the concrete actor form at persistence and API boundaries.  A plain
+# ActorRef remains valid where authentication details are intentionally absent.
+ActorReference = AuthenticatedActor | AgentActor | ActorRef
+
+
 class RecordMetadata(StrictDomainModel):
     """Common optimistic-version and audit metadata for authoritative records."""
 
