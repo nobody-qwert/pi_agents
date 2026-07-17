@@ -42,6 +42,9 @@ class WorkspaceImport:
     transfer_id: str
     manifest: tuple[TransferManifestEntry, ...]
     excluded_paths: tuple[str, ...]
+    protected_paths: tuple[str, ...]
+    source_git_head: str | None
+    source_git_dirty: bool | None
     baseline: GuestBaseline
 
 
@@ -94,6 +97,9 @@ class WorkspaceImportService:
         if guest.status != "ready":
             raise WorkspaceImportError("guest_not_ready")
         try:
+            preview = self._catalog.preview(project_id)
+            if preview.source_fingerprint != expected_source_fingerprint:
+                raise ProjectPolicyError("source_fingerprint_changed")
             snapshot = self._catalog.snapshot(
                 project_id, expected_source_fingerprint=expected_source_fingerprint
             )
@@ -137,6 +143,9 @@ class WorkspaceImportService:
             transfer_id=transfer_id,
             manifest=manifest,
             excluded_paths=snapshot.excluded_paths,
+            protected_paths=preview.protected_paths,
+            source_git_head=preview.git_head,
+            source_git_dirty=preview.git_dirty,
             baseline=baseline,
         )
         self._imports[workspace_id] = imported
