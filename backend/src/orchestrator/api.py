@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from orchestrator.commands import CommandError, RunCommandService
@@ -15,6 +15,7 @@ from orchestrator.graph import compile_control_graph, project_registry
 from orchestrator.graph.registry import AgentRegistry
 from orchestrator.model_gateway import ModelGateway
 from orchestrator.projects import ProjectCatalog, ProjectPolicyError
+from orchestrator.sse import EventStreamError, SseEventService
 
 
 class ApiError(BaseModel):
@@ -28,6 +29,7 @@ class ApiServices:
     projects: ProjectCatalog
     gateway: ModelGateway
     commands: RunCommandService | None = None
+    events: SseEventService | None = None
 
 
 class RunCreateRequest(BaseModel):
@@ -64,6 +66,10 @@ def create_app(services: ApiServices) -> FastAPI:
     async def command_error(request: Request, error: CommandError) -> JSONResponse:
         status = 409 if str(error) == "idempotency_conflict" else 400
         return _error(request, status, str(error))
+
+    @app.exception_handler(EventStreamError)
+    async def stream_error(request: Request, error: EventStreamError) -> JSONResponse:
+        return _error(request, 400, str(error))
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, error: HTTPException) -> JSONResponse:
@@ -145,6 +151,22 @@ def create_app(services: ApiServices) -> FastAPI:
             run_id=run.run_id, project_id=run.project_id, status=run.status
         )
 
+    @app.get("/api/v1/runs/{run_id}/events")
+    def events(
+        run_id: str,
+        user_id: Annotated[str, Depends(_identity)],
+        last_event_id: Annotated[str | None, Header()] = None,
+    ) -> StreamingResponse:
+        try:
+            cursor = int(last_event_id) if last_event_id is not None else 0
+        except ValueError as error:
+            raise EventStreamError("invalid_event_cursor") from error
+        service = _events(services)
+        payload = service.encode(
+            service.replay(run_id=run_id, user_id=user_id, after_sequence=cursor)
+        )
+        return StreamingResponse(iter((payload,)), media_type="text/event-stream")
+
     return app
 
 
@@ -166,3 +188,9 @@ def _commands(services: ApiServices) -> RunCommandService:
     if services.commands is None:
         raise HTTPException(status_code=503, detail="commands_unavailable")
     return services.commands
+
+
+def _events(services: ApiServices) -> SseEventService:
+    if services.events is None:
+        raise HTTPException(status_code=503, detail="events_unavailable")
+    return services.events
