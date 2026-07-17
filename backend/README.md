@@ -40,3 +40,13 @@ To verify the installed package directly:
 ```bash
 uv run python -c "import orchestrator"
 ```
+
+## Artifact storage
+
+`ArtifactService` is the only boundary for authoritative artifact bytes.  The
+local adapter is configured with its volume root at construction time; its
+default policy permits JSON, octet-stream, PDF, Markdown, and plain-text
+content up to 10 MiB per immutable version.  Callers provide a validated logical
+artifact ID and expected current version, never a filesystem path.  Metadata
+records retain the content hash, size, type, and tenant/run/role scope; operator
+previews intentionally omit the internal storage key.

@@ -21,6 +21,9 @@ coverage/
 
 # Local runtime data
 artifacts/
+!backend/src/orchestrator/artifacts/
+!backend/src/orchestrator/artifacts/**
+backend/src/orchestrator/artifacts/__pycache__/
 runs/
 sample_logs/
 .work-packet-runs/
