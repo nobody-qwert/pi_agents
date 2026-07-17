@@ -73,55 +73,8 @@ observability dashboard at `http://localhost:3001`.
 Exact commands and ports remain design targets until the Dockerized vertical
 slice is implemented and verified.
 
-## Serial work-packet implementation
+## Work-packet implementation
 
-[`scripts/run-work-packets.sh`](scripts/run-work-packets.sh) implements the
-numbered work packets sequentially. Every implementation, verification, and
-repair phase starts a fresh ephemeral Codex context. The runner never executes
-packets or agents in parallel.
-
-The runner requires `codex`, `git`, `jq`, and `flock`, a clean working tree, and
-an active Git branch with Git author name and email configured. It creates one
-commit per independently verified packet with a `Work-Packet: NNN` trailer.
-Those trailers make the process resumable: rerunning the command skips committed
-packets and continues at the first unfinished packet.
-
-For reproducible unattended runs, personal `~/.codex/config.toml` settings are
-ignored by default; saved Codex authentication is still used. Pass
-`--use-user-config` only when the global configuration is valid and intentionally
-required by the packet workers.
-
-Preview the sequence without making changes:
-
-```bash
-scripts/run-work-packets.sh --dry-run
-```
-
-Run all unfinished packets in the foreground:
-
-```bash
-scripts/run-work-packets.sh
-```
-
-To keep the process alive after closing the terminal, first ensure the runner
-itself and all other intended changes are committed, then start it in the
-background:
-
-```bash
-mkdir -p .work-packet-runs
-nohup scripts/run-work-packets.sh >.work-packet-runs/runner.out 2>&1 &
-```
-
-Progress and complete Codex output are written beneath
-`.work-packet-runs/<run-id>/`. The directory is ignored by Git. The runner stops
-without starting the next packet when Codex fails, a result is malformed, an
-acceptance check is blocked, verification changes repository files, the repair
-limit is reached, or Git state changes unexpectedly. It does not push commits.
-
-Use `--from NNN`, `--to NNN`, or `--max-repairs N` to bound a run. A stopped run
-with source changes requires manual inspection and a clean working tree before
-it can be restarted. Later runnable and end-to-end packets also require the
-documented LM Studio, Docker, database, and VM infrastructure to be available;
-missing infrastructure causes a safe stop rather than a skipped check.
-The full sequence can take considerable time and Codex usage, and the host must
-remain powered on with required local services running.
+Implement work packets manually, one at a time, by starting Codex with the
+relevant packet and its referenced design sections. The dependency order and
+handoff rules are documented in [the work-packet index](docs/work-packets/README.md).

@@ -370,6 +370,7 @@ def test_migrations_create_initial_durable_tables(
         "conversations",
         "messages",
         "runs",
+        "run_queue",
         "run_events",
         "agent_registry_versions",
         "agent_attempts",

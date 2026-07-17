@@ -99,7 +99,7 @@
     "starting_points": ["backend/src/orchestrator/domain"],
     "depends_on": [],
     "expected_touch_points": ["backend/src/orchestrator/domain"],
-    "protected_touch_points": ["scripts/run-work-packets.sh"],
+    "protected_touch_points": ["backend/src/orchestrator/domain/__init__.py"],
     "acceptance_checks": [
       {
         "schema_version": 1,
