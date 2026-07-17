@@ -10,6 +10,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from orchestrator.commands import CommandError, RunCommandService
 from orchestrator.graph import compile_control_graph, project_registry
 from orchestrator.graph.registry import AgentRegistry
 from orchestrator.model_gateway import ModelGateway
@@ -26,6 +27,18 @@ class ApiServices:
     registry: AgentRegistry
     projects: ProjectCatalog
     gateway: ModelGateway
+    commands: RunCommandService | None = None
+
+
+class RunCreateRequest(BaseModel):
+    project_id: str
+    message: str
+
+
+class RunCommandResponse(BaseModel):
+    run_id: str
+    project_id: str
+    status: str
 
 
 def create_app(services: ApiServices) -> FastAPI:
@@ -46,6 +59,11 @@ def create_app(services: ApiServices) -> FastAPI:
         return _error(
             request, 404 if str(error) == "unknown_project_id" else 400, str(error)
         )
+
+    @app.exception_handler(CommandError)
+    async def command_error(request: Request, error: CommandError) -> JSONResponse:
+        status = 409 if str(error) == "idempotency_conflict" else 400
+        return _error(request, status, str(error))
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, error: HTTPException) -> JSONResponse:
@@ -86,6 +104,47 @@ def create_app(services: ApiServices) -> FastAPI:
             raise HTTPException(status_code=400, detail="invalid_project_id")
         return asdict(services.projects.preview(project_id))
 
+    @app.post("/api/v1/runs", response_model=RunCommandResponse, status_code=202)
+    def create_run(
+        body: RunCreateRequest,
+        user_id: Annotated[str, Depends(_identity)],
+        idempotency_key: Annotated[str | None, Header()] = None,
+    ) -> RunCommandResponse:
+        commands = _commands(services)
+        run = commands.create(
+            user_id=user_id,
+            project_id=body.project_id,
+            message=body.message,
+            idempotency_key=idempotency_key or "",
+        )
+        return RunCommandResponse(
+            run_id=run.run_id, project_id=run.project_id, status=run.status
+        )
+
+    @app.get("/api/v1/runs", response_model=list[RunCommandResponse])
+    def list_runs(
+        user_id: Annotated[str, Depends(_identity)],
+    ) -> list[RunCommandResponse]:
+        return [
+            RunCommandResponse(
+                run_id=run.run_id, project_id=run.project_id, status=run.status
+            )
+            for run in _commands(services).list(user_id=user_id)
+        ]
+
+    @app.post("/api/v1/runs/{run_id}/cancel", response_model=RunCommandResponse)
+    def cancel_run(
+        run_id: str,
+        user_id: Annotated[str, Depends(_identity)],
+        idempotency_key: Annotated[str | None, Header()] = None,
+    ) -> RunCommandResponse:
+        run = _commands(services).cancel(
+            run_id=run_id, user_id=user_id, idempotency_key=idempotency_key or ""
+        )
+        return RunCommandResponse(
+            run_id=run.run_id, project_id=run.project_id, status=run.status
+        )
+
     return app
 
 
@@ -101,3 +160,9 @@ def _error(request: Request, status: int, code: str) -> JSONResponse:
         status_code=status,
         content=ApiError(code=code, request_id=request_id).model_dump(),
     )
+
+
+def _commands(services: ApiServices) -> RunCommandService:
+    if services.commands is None:
+        raise HTTPException(status_code=503, detail="commands_unavailable")
+    return services.commands
