@@ -1,0 +1,21 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { approvalSchema, getJson, postJson, approvalsSchema, promotionPreviewSchema, promotionResultSchema, type Approval, type PromotionPreview } from "./api";
+
+function ApprovalCard({ runId, approval, refresh }: { runId: string; approval: Approval; refresh: () => Promise<unknown> }) {
+  const [comment, setComment] = useState(""); const [error, setError] = useState<string>();
+  async function decide(decision: "approved" | "rejected") { setError(undefined); try { await postJson("/runs/" + runId + "/approvals/" + approval.approval_id + "/decisions", { decision, comment }, approvalSchema); await refresh(); } catch { setError("This decision was not recorded; it may be stale, expired, or unauthorized."); } }
+  return <li><h3>{approval.authority}</h3><p>Affects {approval.affected_versions.join(", ")}. {approval.expires_at ? "Expires " + approval.expires_at : "No expiry supplied."}</p><label>Comment<textarea value={comment} onChange={(event) => setComment(event.target.value)} /></label><button type="button" onClick={() => void decide("approved")}>Approve</button><button type="button" onClick={() => void decide("rejected")}>Reject</button>{error ? <p role="alert">{error}</p> : null}</li>;
+}
+function Preview({ runId, preview, refresh }: { runId: string; preview: PromotionPreview; refresh: () => Promise<unknown> }) {
+  const [version, setVersion] = useState(preview.proposed_version); const [message, setMessage] = useState(""); const [tag, setTag] = useState(true); const [result, setResult] = useState<string>();
+  const eligible = preview.direct_eligible && !preview.conflict_reason && preview.checks.every((check) => check.status === "passed");
+  async function confirm() { try { const outcome = await postJson("/runs/" + runId + "/promotions", { preview_hash: preview.preview_hash, version, message, tag, confirm_preview_hash: preview.preview_hash }, promotionResultSchema); setResult(outcome.status === "committed" ? "Created " + outcome.branch + " at " + outcome.commit_hash : "Promotion was not applied: " + (outcome.reason ?? outcome.status)); await refresh(); } catch { setResult("Promotion was refused; refresh the immutable preview before trying again."); } }
+  return <section aria-label="Promotion preview"><h2>Promotion preview</h2><p>Immutable preview <code>{preview.preview_hash}</code>; baseline {preview.baseline}</p><p>{preview.conflict_reason ?? (eligible ? "Eligible for direct promotion." : "Required checks are not complete.")}</p><h3>Changed files</h3><ul>{preview.changed_files.map((file) => <li key={file}>{file}</li>)}</ul><h3>Checks</h3><ul>{preview.checks.map((check) => <li key={check.name}>{check.name}: {check.status}</li>)}</ul><p>Issues: {preview.issues.join(", ") || "None"}</p><label>Exact version<input value={version} onChange={(event) => setVersion(event.target.value)} /></label><label>Commit message<input value={message} onChange={(event) => setMessage(event.target.value)} /></label><label><input type="checkbox" checked={tag} onChange={(event) => setTag(event.target.checked)} />Create matching tag</label><button type="button" disabled={!eligible || !message.trim() || !version.trim()} onClick={() => void confirm()}>Confirm promotion of this preview</button>{result ? <p role="status">{result}</p> : null}</section>;
+}
+export function PromotionControls({ runId }: { runId: string }) {
+  const approvals = useQuery({ queryKey: ["approvals", runId], queryFn: () => getJson("/runs/" + runId + "/approvals", approvalsSchema) });
+  const preview = useQuery({ queryKey: ["promotion", runId], queryFn: () => getJson("/runs/" + runId + "/promotions/current", promotionPreviewSchema) });
+  if (approvals.isPending || preview.isPending) return <p>Loading authority and promotion state…</p>;
+  return <section><h1>Approvals and promotion</h1>{approvals.isError ? <p role="alert">Approvals are unavailable.</p> : <ul>{approvals.data.approvals.filter((approval) => approval.status === "pending").map((approval) => <ApprovalCard key={approval.approval_id} runId={runId} approval={approval} refresh={approvals.refetch} />)}</ul>}{preview.isError ? <p role="alert">No promotion preview is currently available.</p> : <Preview runId={runId} preview={preview.data} refresh={preview.refetch} />}</section>;
+}
