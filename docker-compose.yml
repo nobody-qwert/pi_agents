@@ -31,12 +31,22 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]
     read_only: true
     tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks: [control]
   web:
     build: { context: ./frontend, dockerfile: Dockerfile }
     ports: ["3000:80"]
     depends_on:
-      api: { condition: service_started }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     networks: [control]
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.122.1
