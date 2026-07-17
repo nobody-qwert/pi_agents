@@ -82,6 +82,9 @@ docker compose config --quiet
 docker compose up --build
 ```
 
+For the bounded API/web/PostgreSQL smoke profile, which tears down its
+temporary containers on exit, run bash scripts/verify-compose-smoke.sh.
+
 The full real-model/guest acceptance profile additionally requires a reachable
 LM Studio server with `qwen3.6-27b`, PostgreSQL integration configuration, and
 KVM guest prerequisites. Those environment-dependent tests are intentionally
