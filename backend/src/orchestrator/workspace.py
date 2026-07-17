@@ -142,6 +142,12 @@ class WorkspaceImportService:
         self._imports[workspace_id] = imported
         return imported
 
+    def get(self, workspace_id: str) -> WorkspaceImport:
+        try:
+            return self._imports[workspace_id]
+        except KeyError as error:
+            raise WorkspaceImportError("unknown_workspace") from error
+
     @staticmethod
     def _validate_ids(workspace_id: str, run_id: str) -> None:
         if not workspace_id.startswith("workspace_"):
