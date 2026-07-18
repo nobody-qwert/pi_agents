@@ -12,7 +12,7 @@ execution:
   timeout_seconds: 180
   max_attempts: 2
   allow_parallel: false
-tools: []
+tools: [read, bash, grep, find, ls, browser_navigate, browser_snapshot, browser_screenshot, browser_console, browser_network]
 input_schema: WorkReport
 output_schema: VerificationReport
 authority:

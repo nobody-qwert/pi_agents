@@ -76,3 +76,24 @@ def test_readiness_returns_safe_unavailable_error(tmp_path: Path) -> None:
     response = client(tmp_path, "model_unavailable").get("/ready")
     assert response.status_code == 503
     assert response.json()["code"] == "model_model_unavailable"
+
+
+def test_readiness_checks_database_before_model(tmp_path: Path) -> None:
+    root = tmp_path / "projects"
+    root.mkdir()
+    registry = load_agent_registry(Path(__file__).parents[3] / "config")
+    api = TestClient(
+        create_app(
+            ApiServices(
+                registry,
+                ProjectCatalog((root,)),
+                Gateway(),
+                database_ready=lambda: False,
+            )
+        )
+    )
+
+    response = api.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "database_unavailable"

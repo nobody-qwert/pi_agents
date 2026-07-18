@@ -190,6 +190,7 @@ class LocalGuestPreviewAdapter:
                 os.fspath(path),
                 "diff",
                 "--name-status",
+                "--no-renames",
                 baseline_commit,
                 target_commit,
             ),
@@ -213,3 +214,30 @@ class LocalGuestPreviewAdapter:
                 raise PromotionPreviewError("invalid_guest_diff")
             changed.append(ChangedPath(path=name, status=status))
         return tuple(changed)
+
+    def export_patch(
+        self, workspace: WorkspaceImport, baseline_commit: str, target_commit: str
+    ) -> bytes:
+        path = (self._guest_root / workspace.guest_id / workspace.guest_path).resolve()
+        if not path.is_relative_to(self._guest_root / workspace.guest_id):
+            raise PromotionPreviewError("guest_path_escape")
+        result = subprocess.run(
+            (
+                "git",
+                "-C",
+                os.fspath(path),
+                "diff",
+                "--binary",
+                "--full-index",
+                "--no-renames",
+                baseline_commit,
+                target_commit,
+            ),
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        if result.returncode or len(result.stdout) > 10_485_760:
+            raise PromotionPreviewError("guest_patch_export_failed")
+        return result.stdout

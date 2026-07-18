@@ -1,0 +1,31 @@
+{
+  "providers": {
+    "lm-studio": {
+      "baseUrl": "http://10.0.2.101:1234/v1",
+      "api": "openai-completions",
+      "apiKey": "lm-studio",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "qwen3.6-27b",
+          "name": "Qwen 3.6 27B",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 32768,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}

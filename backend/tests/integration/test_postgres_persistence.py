@@ -362,6 +362,10 @@ def test_migrations_create_initial_durable_tables(
                 for foreign_key in inspector.get_foreign_keys("agent_attempts")
                 if foreign_key["referred_table"] == "artifacts"
             }
+            approval_request_columns = {
+                column["name"]
+                for column in inspector.get_columns("approval_requests")
+            }
     finally:
         engine.dispose()
 
@@ -388,12 +392,14 @@ def test_migrations_create_initial_durable_tables(
         "issues",
         "approvals",
         "transition_log",
+        "egress_requests",
     } <= tables
     assert {"input_artifact_id", "result_artifact_id"} <= agent_attempt_columns
     assert agent_attempt_artifact_foreign_keys == {
         "input_artifact_id": "artifact_id",
         "result_artifact_id": "artifact_id",
     }
+    assert {"expires_at", "requested_record_version"} <= approval_request_columns
 
 
 def test_authoritative_records_round_trip_with_type_version_and_audit_data(

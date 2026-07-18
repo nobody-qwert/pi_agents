@@ -14,7 +14,7 @@ execution:
   allow_parallel: false
 tools: []
 input_schema: DesignProposal
-output_schema: VerificationReport
+output_schema: DesignCritiqueReport
 authority:
   can_recommend_design_acceptance: true
 visibility:

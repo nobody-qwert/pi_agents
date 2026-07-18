@@ -14,7 +14,7 @@ execution:
   allow_parallel: false
 tools: []
 input_schema: CharterRecord
-output_schema: WorkReport
+output_schema: InvestigationReport
 authority:
   can_investigate_current_state: true
 visibility:

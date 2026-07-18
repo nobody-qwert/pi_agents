@@ -7,6 +7,7 @@ from orchestrator.settings import AppSettings, load_settings
 REQUIRED_ENVIRONMENT = {
     "APP_ENV": "development",
     "APP_BASE_URL": "http://localhost:3000",
+    "DATABASE_URL": "postgresql+psycopg://local/test",
     "MODEL_PROVIDER": "lm-studio",
     "LM_STUDIO_BASE_URL": "http://host.docker.internal:1234/v1",
     "LM_STUDIO_API_KEY": "local-protocol-placeholder",
@@ -26,6 +27,7 @@ def test_load_settings_reads_every_required_value() -> None:
     assert isinstance(settings, AppSettings)
     assert settings.app_env == "development"
     assert str(settings.app_base_url) == "http://localhost:3000/"
+    assert settings.database_url == "postgresql+psycopg://local/test"
     assert settings.model_provider == "lm-studio"
     assert str(settings.lm_studio_base_url) == ("http://host.docker.internal:1234/v1")
     assert settings.lm_studio_model_id == "qwen3.6-27b"
@@ -55,6 +57,7 @@ def test_load_settings_reports_a_missing_required_value(
     [
         ("APP_ENV", "Development", "app_env"),
         ("MODEL_PROVIDER", "fake", "model_provider"),
+        ("DATABASE_URL", "postgresql+asyncpg://local/test", "database_url"),
         ("LM_STUDIO_BASE_URL", "not-a-url", "lm_studio_base_url"),
         ("LM_STUDIO_API_KEY", "   ", "lm_studio_api_key"),
         ("LM_STUDIO_MODEL_ID", "", "lm_studio_model_id"),

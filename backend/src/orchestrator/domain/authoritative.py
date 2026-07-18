@@ -274,7 +274,11 @@ class CheckpointRecord(AuthoritativeRecord):
     checkpoint_id: CheckpointId
     workspace_id: WorkspaceId
     run_id: RunId
-    work_node_id: WorkNodeId
+    work_node_id: WorkNodeId | None = None
+    checkpoint_kind: Literal[
+        "baseline", "execution", "service_accepted", "user_accepted", "rollback"
+    ] = "service_accepted"
+    design_version: DesignVersion = 1
     commit_hash: GitObjectHash
     tree_hash: GitObjectHash
     accepted_evidence_ids: tuple[EvidenceId, ...]
@@ -293,6 +297,10 @@ class PromotionRecord(AuthoritativeRecord):
     target_branch: ShortStr
     target_commit: GitObjectHash | None = None
     target_tag: ShortStr | None = None
+    commit_message: NonEmptyStr | None = None
+    confirmation_fingerprint: Sha256Digest | None = None
+    review_repository_id: ShortStr | None = None
+    review_commit: GitObjectHash | None = None
     status: PromotionStatus
     decided_by: AuthenticatedActor
     authority: AuthorityGrant

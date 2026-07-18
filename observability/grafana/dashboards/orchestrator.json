@@ -1,0 +1,37 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "API request p95 latency",
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, operation) (rate(orchestrator_api_request_duration_bucket[5m])))", "legendFormat": "{{operation}}", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Runner stage p95 latency",
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, stage) (rate(orchestrator_runner_stage_duration_bucket[5m])))", "legendFormat": "{{stage}}", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent invocation p95 latency",
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, stage, status) (rate(orchestrator_agent_duration_bucket[5m])))", "legendFormat": "{{stage}} {{status}}", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "type": "timeseries",
+      "title": "Control-plane operation rate",
+      "targets": [{"expr": "sum by (__name__) (rate({__name__=~\"orchestrator_.*_count\"}[5m]))", "legendFormat": "{{__name__}}", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["orchestrator"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "Orchestrator Overview",
+  "uid": "orchestrator-overview",
+  "version": 2
+}

@@ -14,9 +14,13 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import Field, ValidationError, field_validator, model_validator
 
 from orchestrator.domain import (
+    CharterProposal,
     CharterRecord,
+    DesignCritiqueReport,
     DesignProposal,
     DesignRevision,
+    IntegrationReport,
+    InvestigationReport,
     IssueReport,
     OutcomeEvidence,
     ProposedWorkPlan,
@@ -112,8 +116,12 @@ SCHEMA_REGISTRY: Final[Mapping[str, type[StrictDomainModel]]] = MappingProxyType
         model.__name__: model
         for model in (
             CharterRecord,
+            CharterProposal,
+            DesignCritiqueReport,
             DesignProposal,
             DesignRevision,
+            IntegrationReport,
+            InvestigationReport,
             IssueReport,
             OutcomeEvidence,
             ProposedWorkPlan,
@@ -123,7 +131,25 @@ SCHEMA_REGISTRY: Final[Mapping[str, type[StrictDomainModel]]] = MappingProxyType
         )
     }
 )
-TOOL_REGISTRY: Final[frozenset[str]] = frozenset()
+TOOL_REGISTRY: Final[frozenset[str]] = frozenset(
+    {
+        "read",
+        "write",
+        "edit",
+        "bash",
+        "grep",
+        "find",
+        "ls",
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_click",
+        "browser_input",
+        "browser_screenshot",
+        "browser_console",
+        "browser_network",
+    }
+)
+_MUTATING_TOOLS: Final[frozenset[str]] = frozenset({"write", "edit"})
 
 _ROLE_AUTHORITY: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
@@ -137,6 +163,21 @@ _ROLE_AUTHORITY: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
         "integrator": frozenset({"can_integrate", "can_mutate_artifacts"}),
         "outcome-verifier": frozenset({"can_verify_outcome"}),
         "issue-triager": frozenset({"can_triage"}),
+    }
+)
+
+_OUTPUT_CAPABILITY: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "CharterProposal": "can_propose_charter",
+        "DesignCritiqueReport": "can_recommend_design_acceptance",
+        "DesignProposal": "can_propose_design",
+        "IntegrationReport": "can_integrate",
+        "InvestigationReport": "can_investigate_current_state",
+        "IssueReport": "can_triage",
+        "OutcomeEvidence": "can_verify_outcome",
+        "ProposedWorkPlan": "can_propose_work_plan",
+        "VerificationReport": "can_verify_local",
+        "WorkReport": "can_mutate_artifacts",
     }
 )
 
@@ -320,12 +361,23 @@ def _validate_agent_policy(config: AgentConfig, path: Path) -> None:
         raise RegistryValidationError(
             f"{path.name}: unknown tools: {', '.join(sorted(unknown_tools))}"
         )
+    if config.agent_id not in {"executor", "integrator"} and set(
+        config.tools
+    ).intersection(_MUTATING_TOOLS):
+        raise RegistryValidationError(
+            f"{path.name}: mutation tools exceed role boundary"
+        )
     for field_name in ("input_schema", "output_schema"):
         schema_name = getattr(config, field_name)
         if schema_name not in SCHEMA_REGISTRY:
             raise RegistryValidationError(
                 f"{path.name}: unknown {field_name}: {schema_name}"
             )
+    required = _OUTPUT_CAPABILITY.get(config.output_schema)
+    if required is not None and required not in config.authority.granted_capabilities():
+        raise RegistryValidationError(
+            f"{path.name}: output_schema requires authority: {required}"
+        )
 
 
 def _resolve_prompt(root: Path, prompt_ref: str, config_path: Path) -> Path:

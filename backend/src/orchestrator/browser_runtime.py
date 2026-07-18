@@ -15,7 +15,7 @@ BrowserAction = Literal[
     "navigate", "snapshot", "click", "input", "screenshot", "console", "network"
 ]
 _READ_ONLY_ACTIONS = frozenset({"snapshot", "screenshot", "console", "network"})
-_MUTATING_ACTIONS = frozenset({"navigate", "click", "input"})
+_MUTATING_ACTIONS = frozenset({"click", "input"})
 
 
 class BrowserRuntimeError(Exception):
@@ -68,6 +68,13 @@ class BrowserRuntime:
         }:
             raise BrowserRuntimeError("browser_action_not_permitted")
         if request.action in _READ_ONLY_ACTIONS and role not in {
+            "executor",
+            "integrator",
+            "local-verifier",
+            "outcome-verifier",
+        }:
+            raise BrowserRuntimeError("browser_action_not_permitted")
+        if request.action == "navigate" and role not in {
             "executor",
             "integrator",
             "local-verifier",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -63,7 +64,11 @@ class PostgresAuthoritativeRepository[RecordT: AuthoritativeRecord]:
         values = _record_values(record, self._definition)
         columns = ", ".join(values)
         parameters = ", ".join(
-            "CAST(:payload AS jsonb)" if name == "payload" else f":{name}"
+            (
+                f"CAST(:{name} AS jsonb)"
+                if name in {"payload", "evidence_ids"}
+                else f":{name}"
+            )
             for name in values
         )
         statement = text(
@@ -338,42 +343,44 @@ class PostgresUnitOfWork:
 
     def __init__(self, database_url: str) -> None:
         self._engine = create_engine(database_url, pool_pre_ping=True)
-        self._connection: Connection | None = None
-        self._repositories: dict[str, PostgresAuthoritativeRepository[Any]] = {}
+        self._state: ContextVar[_TransactionState | None] = ContextVar(
+            f"postgres_uow_{id(self)}", default=None
+        )
 
     @contextmanager
     def transaction(self) -> Iterator[PostgresUnitOfWork]:
-        if self._connection is not None:
+        if self._state.get() is not None:
             yield self
             return
 
         with self._engine.begin() as connection:
-            self._connection = connection
-            self._install_repositories()
+            repositories = {
+                attribute: PostgresAuthoritativeRepository(connection, definition)
+                for attribute, definition in _REPOSITORIES.items()
+            }
+            token = self._state.set(_TransactionState(connection, repositories))
             try:
                 yield self
             finally:
-                self._connection = None
-                self._repositories = {}
+                self._state.reset(token)
 
     def close(self) -> None:
         """Release the adapter's connection pool."""
         self._engine.dispose()
 
+    @property
+    def connection(self) -> Connection:
+        """Expose the current transaction to PostgreSQL application adapters."""
+        return self._require_connection()
+
     def iter_repositories(
         self,
     ) -> Iterator[AuthoritativeRepository[AuthoritativeRecord]]:
+        state = self._require_state()
         yield from cast(
             tuple[AuthoritativeRepository[AuthoritativeRecord], ...],
-            tuple(self._repositories.values()),
+            tuple(state.repositories.values()),
         )
-
-    def _install_repositories(self) -> None:
-        connection = self._require_connection()
-        self._repositories = {
-            attribute: PostgresAuthoritativeRepository(connection, definition)
-            for attribute, definition in _REPOSITORIES.items()
-        }
 
     @property
     def runs(self) -> PostgresAuthoritativeRepository[RunRecord]:
@@ -442,7 +449,7 @@ class PostgresUnitOfWork:
         self, attribute: str, model_type: type[RecordT]
     ) -> PostgresAuthoritativeRepository[RecordT]:
         try:
-            repository = self._repositories[attribute]
+            repository = self._require_state().repositories[attribute]
         except KeyError as error:
             raise RuntimeError(
                 "repositories may only be used inside transaction()"
@@ -452,9 +459,19 @@ class PostgresUnitOfWork:
         return cast(PostgresAuthoritativeRepository[RecordT], repository)
 
     def _require_connection(self) -> Connection:
-        if self._connection is None:
+        return self._require_state().connection
+
+    def _require_state(self) -> _TransactionState:
+        state = self._state.get()
+        if state is None:
             raise RuntimeError("repositories may only be used inside transaction()")
-        return self._connection
+        return state
+
+
+@dataclass(slots=True)
+class _TransactionState:
+    connection: Connection
+    repositories: dict[str, PostgresAuthoritativeRepository[Any]]
 
 
 def _record_values[RecordT: AuthoritativeRecord](
@@ -475,6 +492,45 @@ def _record_values[RecordT: AuthoritativeRecord](
         "payload": json.dumps(payload, separators=(",", ":")),
     }
     values.update({column: payload[column] for column in definition.projection_columns})
+    if definition.table_name == "workspace_sessions":
+        workspace_status = cast(str, payload["status"])
+        lifecycle_status = (
+            "creating"
+            if workspace_status == "selected"
+            else "destroyed"
+            if workspace_status == "destroyed"
+            else "ready"
+        )
+        values.update(
+            {
+                "overlay_id": f"overlay-{cast(str, payload['run_id']).removeprefix('run_')}",
+                "lifecycle_status": lifecycle_status,
+                "provisioned_at": (
+                    None if lifecycle_status == "creating" else metadata.updated_at
+                ),
+                "ready_at": (
+                    metadata.updated_at if lifecycle_status == "ready" else None
+                ),
+                "destroyed_at": (
+                    metadata.updated_at if lifecycle_status == "destroyed" else None
+                ),
+            }
+        )
+    elif definition.table_name == "workspace_checkpoints":
+        values.update(
+            {
+                "checkpoint_kind": payload["checkpoint_kind"],
+                "commit_hash": payload["commit_hash"],
+                "tree_hash": payload["tree_hash"],
+                "design_version": payload["design_version"],
+                "evidence_ids": json.dumps(
+                    payload["accepted_evidence_ids"], separators=(",", ":")
+                ),
+                "rollback_from_checkpoint_id": payload[
+                    "rollback_from_checkpoint_id"
+                ],
+            }
+        )
     return values
 
 
@@ -537,7 +593,15 @@ _REPOSITORIES: dict[str, _RepositoryDefinition[Any]] = {
     "issues": _RepositoryDefinition("issues", "issue_id", IssueRecord),
     "approvals": _RepositoryDefinition("approvals", "approval_id", ApprovalRecord),
     "workspace_sessions": _RepositoryDefinition(
-        "workspace_sessions", "workspace_id", WorkspaceRecord
+        "workspace_sessions",
+        "workspace_id",
+        WorkspaceRecord,
+        (
+            "selected_source",
+            "source_fingerprint",
+            "guest_identity",
+            "guest_path",
+        ),
     ),
     "workspace_checkpoints": _RepositoryDefinition(
         "workspace_checkpoints",
@@ -549,7 +613,10 @@ _REPOSITORIES: dict[str, _RepositoryDefinition[Any]] = {
         "promotions", "promotion_id", PromotionRecord, ("workspace_id",)
     ),
     "transition_log": _RepositoryDefinition(
-        "transition_log", "transition_id", TransitionRecord, ("work_node_id",)
+        "transition_log",
+        "transition_id",
+        TransitionRecord,
+        ("work_node_id", "previous_state", "next_state"),
     ),
     "run_completions": _RepositoryDefinition(
         "run_completions", "completion_id", RunCompletionRecord

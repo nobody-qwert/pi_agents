@@ -26,6 +26,10 @@ artifacts/
 backend/src/orchestrator/artifacts/__pycache__/
 runs/
 sample_logs/
+vm/base/*.qcow2
+vm/base/*.sha256
+vm/ssh/*
+!vm/ssh/README.md
 
 # Editors and operating systems
 .vscode/

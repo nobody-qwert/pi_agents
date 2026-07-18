@@ -32,6 +32,7 @@ from orchestrator.domain.primitives import (
 EventType = Literal[
     "run.created",
     "run.started",
+    "run.cancel_requested",
     "run.paused",
     "run.completed",
     "run.blocked",
@@ -284,6 +285,9 @@ _SAFE_STATES = {
     "RESUME_GATE",
     "COMPLETE",
     "BLOCKED",
+    "AGENT",
+    "USER",
+    "PAUSED",
 }
 _SAFE_OUTCOMES = {
     "created",

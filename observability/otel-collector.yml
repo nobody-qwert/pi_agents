@@ -6,14 +6,20 @@ receivers:
 exporters:
   debug:
     verbosity: basic
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+  prometheus:
+    endpoint: 0.0.0.0:9464
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [otlphttp/tempo, debug]
     metrics:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [prometheus, debug]
     logs:
       receivers: [otlp]
-      exporters: [debug]
+      exporters: [otlphttp/loki, debug]

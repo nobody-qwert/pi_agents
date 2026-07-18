@@ -192,6 +192,41 @@ def test_duplicate_delivery_cannot_obtain_a_second_current_lease(
         queue.close()
 
 
+def test_paused_input_owner_fences_new_runner_leases(
+    postgres_uow: PostgresUnitOfWork,
+    migrated_postgres_database: str,
+) -> None:
+    queue, _, _ = _components(postgres_uow, migrated_postgres_database)
+    try:
+        run_id = "run_runner_input_paused"
+        _seed(postgres_uow, queue, run_id)
+        with postgres_uow.transaction() as unit_of_work:
+            unit_of_work.connection.execute(
+                text(
+                    "INSERT INTO workspace_input_ownership "
+                    "(run_id, owner, record_version, updated_at) "
+                    "VALUES (:run_id, 'PAUSED', 1, :now)"
+                ),
+                {"run_id": run_id, "now": datetime.now(UTC)},
+            )
+
+        assert queue.claim(run_id, owner="runner-paused").outcome == "unavailable"
+        with postgres_uow.transaction() as unit_of_work:
+            unit_of_work.connection.execute(
+                text(
+                    "UPDATE workspace_input_ownership SET owner = 'AGENT', "
+                    "record_version = 2, updated_at = :now WHERE run_id = :run_id"
+                ),
+                {"run_id": run_id, "now": datetime.now(UTC)},
+            )
+        claim = queue.claim(run_id, owner="runner-resumed")
+        assert claim.outcome == "claimed"
+        assert claim.lease is not None
+        assert queue.release(claim.lease)
+    finally:
+        queue.close()
+
+
 def test_lease_renewal_is_compare_and_swap_and_expiry_allows_takeover(
     postgres_uow: PostgresUnitOfWork,
     migrated_postgres_database: str,

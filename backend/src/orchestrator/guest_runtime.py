@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
@@ -22,6 +23,12 @@ _ROLE_TOOLS: dict[str, frozenset[GuestToolName]] = {
 }
 _FORBIDDEN_COMMAND_TOKENS = frozenset(
     {"sudo", "su", "docker", "ssh", "scp", "rsync", "curl", "wget", "nc", "socat"}
+)
+_VERIFIER_COMMANDS = frozenset(
+    {"pytest", "ruff", "mypy", "npm", "git", "grep", "find", "ls", "sed", "head", "tail", "wc"}
+)
+_VERIFIER_GIT_COMMANDS = frozenset(
+    {"status", "diff", "show", "log", "rev-parse", "ls-files", "cat-file"}
 )
 
 
@@ -129,10 +136,10 @@ class GuestToolRuntime:
             raise GuestRuntimeError("tool_not_permitted")
         self._safe_relative_path(request.relative_path)
         if request.tool == "bash":
-            self._validate_command(request.command)
+            self._validate_command(request.command, role=role)
 
     @staticmethod
-    def _validate_command(command: tuple[str, ...]) -> None:
+    def _validate_command(command: tuple[str, ...], *, role: str) -> None:
         if not command or any(
             not argument or len(argument) > 4096 for argument in command
         ):
@@ -144,6 +151,18 @@ class GuestToolRuntime:
             for argument in command
         ):
             raise GuestRuntimeError("unsafe_command_argument")
+        if role in {"local-verifier", "outcome-verifier"}:
+            executable = Path(command[0]).name
+            if executable not in _VERIFIER_COMMANDS:
+                raise GuestRuntimeError("verifier_command_not_permitted")
+            if executable == "git" and (
+                len(command) < 2 or command[1] not in _VERIFIER_GIT_COMMANDS
+            ):
+                raise GuestRuntimeError("verifier_command_not_permitted")
+            if executable == "npm" and (
+                len(command) < 2 or command[1] not in {"test", "run"}
+            ):
+                raise GuestRuntimeError("verifier_command_not_permitted")
 
     @staticmethod
     def _safe_workspace_path(path: str) -> str:
@@ -222,8 +241,11 @@ class LocalGuestRuntimeAdapter:
                             matches.append(f"{path.relative_to(root)}:{number}:{line}")
             return "\n".join(matches), 0
         try:
+            command = request.command
+            if command[0] == "python":
+                command = (sys.executable, *command[1:])
             completed = subprocess.run(
-                request.command,
+                command,
                 cwd=target,
                 check=False,
                 stdout=subprocess.PIPE,

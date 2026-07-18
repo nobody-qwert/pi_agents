@@ -12,9 +12,9 @@ execution:
   timeout_seconds: 240
   max_attempts: 2
   allow_parallel: false
-tools: []
+tools: [read, write, edit, bash, grep, find, ls, browser_navigate, browser_snapshot, browser_click, browser_input, browser_screenshot, browser_console, browser_network]
 input_schema: VerificationReport
-output_schema: WorkReport
+output_schema: IntegrationReport
 authority:
   can_mutate_artifacts: true
   can_integrate: true

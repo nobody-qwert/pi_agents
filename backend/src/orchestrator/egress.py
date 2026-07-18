@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import hmac
 import ipaddress
+import re
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Protocol
 from urllib.parse import urlsplit
+
+_RUN_ID = re.compile(r"^run_[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+
+
+def issue_egress_token(secret: str, run_id: str) -> str:
+    """Derive one non-reversible credential scoped to an existing run identity."""
+    if len(secret) < 32 or _RUN_ID.fullmatch(run_id) is None:
+        raise ValueError("invalid egress token input")
+    return hmac.new(secret.encode(), run_id.encode(), sha256).hexdigest()
 
 
 class EgressDenied(Exception):

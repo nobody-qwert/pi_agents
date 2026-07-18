@@ -12,6 +12,7 @@ from psycopg import Connection
 from orchestrator.runner.coordinator import RunnerCoordinator, StaleCheckpointError
 from orchestrator.runner.graph import StagePort, compile_runner_graph
 from orchestrator.runner.leases import (
+    AutomationPausedError,
     LeaseCancelledError,
     LeaseLostError,
     PostgresRunLeaseQueue,
@@ -28,6 +29,7 @@ class RunnerResult:
         "unavailable",
         "lease_lost",
         "retry_scheduled",
+        "paused",
     ]
 
 
@@ -119,6 +121,9 @@ class RunnerService:
             self._coordinator.stop_safely(lease.run_id, reason="cancelled")
             self._lease_queue.complete(lease_ref[0])
             return RunnerResult(lease.run_id, "blocked")
+        except AutomationPausedError:
+            self._lease_queue.release(lease_ref[0])
+            return RunnerResult(lease.run_id, "paused")
         except StaleCheckpointError:
             self._coordinator.stop_safely(lease.run_id, reason="stale_checkpoint")
             self._lease_queue.complete(lease_ref[0])

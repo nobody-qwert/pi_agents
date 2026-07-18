@@ -4,7 +4,7 @@ set -euo pipefail
 mkdir -p projects
 trap 'docker compose down' EXIT
 
-docker compose up -d --wait postgres api web
+docker compose up -d --wait --build postgres vm-manager desktop-gateway api promotion-manager runner web
 curl --fail --silent --show-error --output /dev/null http://localhost:8000/health
 curl --fail --silent --show-error --output /dev/null \
   -H 'X-Dev-User: user_smoke' \

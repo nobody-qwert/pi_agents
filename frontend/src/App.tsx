@@ -1,12 +1,16 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
-import { getJson, graphSchema, type GraphNode } from "./api";
-import { ChatWorkspace } from "./ChatWorkspace";
-import { GraphInspector, GraphView } from "./GraphView";
-import { SafeMarkdown } from "./Markdown";
+import type { GraphNode } from "./api";
+import { GraphInspector } from "./GraphInspector";
 
-const views = ["workspace", "graph", "runs", "settings"] as const;
-function Graph({ onInspect }: { onInspect: (stage: GraphNode) => void }) { const query = useQuery({ queryKey: ["control-graph"], queryFn: () => getJson("/system/graph", graphSchema) }); if (query.isPending) return <p>Loading graph…</p>; if (query.isError) return <p role="alert">Could not load the control graph.</p>; return <GraphView controlGraph={query.data} onInspect={({ stage }) => onInspect(stage)} />; }
-function View({ name, onInspect }: { name: string; onInspect: (stage: GraphNode) => void }) { if (name === "workspace") return <ChatWorkspace />; if (name === "graph") return <section><h1>graph</h1><Graph onInspect={onInspect} /></section>; return <section><h1>{name}</h1><SafeMarkdown source="This view is ready for its next feature packet." /></section>; }
-export function App() { const [selection, setSelection] = useState<{ stage: GraphNode }>(); return <div className="shell"><nav aria-label="Primary">{views.map((view) => <NavLink key={view} to={`/${view}`}>{view}</NavLink>)}</nav><main><Routes>{views.map((view) => <Route key={view} path={`/${view}`} element={<View name={view} onInspect={(stage) => setSelection({ stage })} />} />)}<Route path="*" element={<Navigate to="/workspace" replace />} /></Routes></main><aside aria-label="Inspector"><GraphInspector selection={selection} /></aside></div>; }
+const ChatWorkspace = lazy(() => import("./ChatWorkspace").then((module) => ({ default: module.ChatWorkspace })));
+const GraphPage = lazy(() => import("./GraphPage"));
+const RunsView = lazy(() => import("./RunsView").then((module) => ({ default: module.RunsView })));
+const SettingsView = lazy(() => import("./SettingsView").then((module) => ({ default: module.SettingsView })));
+const views = [{ path: "/workspace", label: "Workspace", glyph: "W" }, { path: "/graph", label: "Graph", glyph: "G" }, { path: "/runs", label: "Runs", glyph: "R" }, { path: "/settings", label: "System", glyph: "S" }] as const;
+
+export function App() {
+  const [selection, setSelection] = useState<{ stage: GraphNode }>();
+  const inspect = useCallback((stage: GraphNode) => setSelection({ stage }), []);
+  return <div className="shell"><nav aria-label="Primary" className="primary-nav"><div className="brand"><span className="brand-mark">π</span><div><strong>Nested Loop</strong><small>Orchestrator</small></div></div><div className="nav-links">{views.map((view) => <NavLink key={view.path} to={view.path}><span aria-hidden="true">{view.glyph}</span>{view.label}</NavLink>)}</div><p className="nav-foot">Deterministic control plane</p></nav><main><Suspense fallback={<div className="empty-state">Loading view…</div>}><Routes><Route path="/workspace" element={<ChatWorkspace />} /><Route path="/graph" element={<GraphPage onInspect={inspect} />} /><Route path="/runs" element={<RunsView />} /><Route path="/settings" element={<SettingsView />} /><Route path="*" element={<Navigate to="/workspace" replace />} /></Routes></Suspense></main><aside aria-label="Inspector" className="inspector"><GraphInspector selection={selection} /></aside></div>;
+}

@@ -86,6 +86,7 @@ class ArtifactPolicy(StrictDomainModel):
         "application/pdf",
         "text/markdown",
         "text/plain",
+        "text/x-diff",
     )
 
     @field_validator("allowed_media_types")

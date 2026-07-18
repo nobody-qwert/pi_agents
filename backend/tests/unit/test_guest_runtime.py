@@ -60,6 +60,18 @@ def test_verifier_is_read_only_and_escapes_are_rejected(tmp_path: Path) -> None:
         )
     with pytest.raises(ValidationError, match="parent traversal"):
         GuestToolRequest(tool="read", relative_path="../source.py")
+    with pytest.raises(GuestRuntimeError, match="verifier_command_not_permitted"):
+        tool_runtime.execute(
+            role="local-verifier",
+            request=GuestToolRequest(
+                tool="bash", command=("python", "-c", "open('changed', 'w').write('x')")
+            ),
+        )
+    with pytest.raises(GuestRuntimeError, match="verifier_command_not_permitted"):
+        tool_runtime.execute(
+            role="outcome-verifier",
+            request=GuestToolRequest(tool="bash", command=("git", "reset", "--hard")),
+        )
 
 
 def test_command_policy_cancellation_and_bounded_output(tmp_path: Path) -> None:

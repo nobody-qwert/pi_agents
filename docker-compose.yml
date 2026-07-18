@@ -17,22 +17,233 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://orchestrator:orchestrator-local@postgres:5432/orchestrator}
       MODEL_PROVIDER: lm-studio
-      LM_STUDIO_BASE_URL: ${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      LM_STUDIO_BASE_URL: http://inference-proxy:8050/v1
       LM_STUDIO_API_KEY: ${LM_STUDIO_API_KEY:-lm-studio}
       LM_STUDIO_MODEL_ID: ${LM_STUDIO_MODEL_ID:-qwen3.6-27b}
       PROJECT_ROOTS: /projects
       ORCHESTRATOR_CONFIG_ROOT: /app/config
+      VM_MANAGER_URL: http://vm-manager:8010
+      VM_MANAGER_AUTH_TOKEN: ${VM_MANAGER_AUTH_TOKEN:-local-vm-manager-token-change-me}
+      DESKTOP_SESSION_SECRET: ${DESKTOP_SESSION_SECRET:-local-desktop-session-secret-change-me-000000}
+      PI_PREVIEW_PORTS: ${PI_PREVIEW_PORTS:-3000,4173,5173,8000,8080}
+      PROMOTION_MANAGER_URL: http://promotion-manager:8040
+      PROMOTION_MANAGER_AUTH_TOKEN: ${PROMOTION_MANAGER_AUTH_TOKEN:-local-promotion-manager-token-change-me}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_CONTENT_CAPTURE: "false"
+      ARTIFACT_ROOT: /var/lib/orchestrator/artifacts
     volumes:
-      - ./projects:/projects:ro
+      - ${PROJECT_PATH_HOST:-./projects/example}:/projects/${PROJECT_NAME:-example}:ro
+      - artifact-data:/var/lib/orchestrator/artifacts:ro
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
-    extra_hosts: ["host.docker.internal:host-gateway"]
+      vm-manager: { condition: service_healthy }
     read_only: true
     tmpfs: [/tmp]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [control]
+  runner:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["python", "-m", "orchestrator.runner_main"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://orchestrator:orchestrator-local@postgres:5432/orchestrator}
+      MODEL_PROVIDER: lm-studio
+      LM_STUDIO_BASE_URL: http://inference-proxy:8050/v1
+      LM_STUDIO_API_KEY: ${LM_STUDIO_API_KEY:-lm-studio}
+      LM_STUDIO_MODEL_ID: ${LM_STUDIO_MODEL_ID:-qwen3.6-27b}
+      PROJECT_ROOTS: /projects
+      ORCHESTRATOR_CONFIG_ROOT: /app/config
+      VM_MANAGER_URL: http://vm-manager:8010
+      VM_MANAGER_AUTH_TOKEN: ${VM_MANAGER_AUTH_TOKEN:-local-vm-manager-token-change-me}
+      ARTIFACT_ROOT: /var/lib/orchestrator/artifacts
+      RUNNER_LEASE_SECONDS: ${RUNNER_LEASE_SECONDS:-600}
+      RUNNER_OWNER: ${RUNNER_OWNER:-runner-compose-1}
+      PI_GUEST_CLIENT_TIMEOUT_SECONDS: ${PI_GUEST_CLIENT_TIMEOUT_SECONDS:-330}
+      PI_GUEST_READY_TIMEOUT_SECONDS: ${PI_GUEST_READY_TIMEOUT_SECONDS:-45}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_CONTENT_CAPTURE: "false"
+    volumes:
+      - ${PROJECT_PATH_HOST:-./projects/example}:/projects/${PROJECT_NAME:-example}:ro
+      - artifact-data:/var/lib/orchestrator/artifacts
+    depends_on:
+      postgres: { condition: service_healthy }
+      vm-manager: { condition: service_healthy }
+      api: { condition: service_healthy }
+    read_only: true
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8020/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [control]
+  vm-manager:
+    build: { context: ., dockerfile: backend/VmManager.Dockerfile }
+    environment:
+      PI_VM_BASE_IMAGE: /var/lib/orchestrator/base/pi-base.qcow2
+      PI_VM_ROOT: /var/lib/orchestrator/vms
+      PI_VM_MEMORY_MB: ${PI_VM_MEMORY_MB:-4096}
+      PI_VM_CPU_COUNT: ${PI_VM_CPU_COUNT:-4}
+      PI_VM_OPERATION_TIMEOUT_SECONDS: ${PI_VM_OPERATION_TIMEOUT_SECONDS:-30}
+      PI_VM_SSH_PRIVATE_KEY: /var/lib/orchestrator/ssh/id_ed25519
+      PI_VM_SSH_KNOWN_HOSTS: /var/lib/orchestrator/ssh/known_hosts
+      PI_GUEST_BINARY: ${PI_GUEST_BINARY:-pi}
+      PI_GUEST_PROVIDER: ${PI_GUEST_PROVIDER:-lm-studio}
+      PI_GUEST_MODEL: ${LM_STUDIO_MODEL_ID:-qwen3.6-27b}
+      PI_GUEST_ATTEMPT_TIMEOUT_SECONDS: ${PI_GUEST_ATTEMPT_TIMEOUT_SECONDS:-300}
+      PI_BROWSER_EXTENSION: /opt/orchestrator/pi/browser-tools.ts
+      PI_PREVIEW_PORTS: ${PI_PREVIEW_PORTS:-3000,4173,5173,8000,8080}
+      EGRESS_PROXY_HOST: egress-proxy
+      EGRESS_PROXY_PORT: 8080
+      INFERENCE_PROXY_HOST: inference-proxy
+      INFERENCE_PROXY_PORT: 8050
+      EGRESS_AUTH_SECRET: ${EGRESS_AUTH_SECRET:-local-egress-auth-secret-change-me-0000000000}
+      VM_MANAGER_AUTH_TOKEN: ${VM_MANAGER_AUTH_TOKEN:-local-vm-manager-token-change-me}
+    volumes:
+      - ./vm/base:/var/lib/orchestrator/base:ro
+      - ./vm/ssh:/var/lib/orchestrator/ssh:ro
+      - vm-data:/var/lib/orchestrator/vms
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/live')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      egress-proxy: { condition: service_healthy }
+      inference-proxy: { condition: service_healthy }
+    networks: [control]
+  egress-proxy:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["python", "-m", "orchestrator.egress_proxy_main"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://orchestrator:orchestrator-local@postgres:5432/orchestrator}
+      EGRESS_AUTH_SECRET: ${EGRESS_AUTH_SECRET:-local-egress-auth-secret-change-me-0000000000}
+      EGRESS_PUBLIC_HOSTS: ${EGRESS_PUBLIC_HOSTS:-example.com,www.example.com}
+      EGRESS_CONNECTION_BUDGET_BYTES: ${EGRESS_CONNECTION_BUDGET_BYTES:-52428800}
+      EGRESS_RUN_BUDGET_BYTES: ${EGRESS_RUN_BUDGET_BYTES:-209715200}
+      EGRESS_TIMEOUT_SECONDS: ${EGRESS_TIMEOUT_SECONDS:-120}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8060/live')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [control, egress]
+  lm-studio-relay:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["python", "-m", "orchestrator.lm_studio_relay_main"]
+    network_mode: host
+    environment:
+      LM_STUDIO_RELAY_SOCKET: /run/lm-studio/lm-studio.sock
+      LM_STUDIO_RELAY_UPSTREAM_HOST: 127.0.0.1
+      LM_STUDIO_RELAY_UPSTREAM_PORT: ${LM_STUDIO_RELAY_UPSTREAM_PORT:-1234}
+    volumes:
+      - lm-studio-relay:/run/lm-studio
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,socket; socket.create_connection(('127.0.0.1', int(os.environ['LM_STUDIO_RELAY_UPSTREAM_PORT'])), timeout=3).close()"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+  inference-proxy:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["python", "-m", "orchestrator.inference_proxy_main"]
+    environment:
+      LM_STUDIO_UPSTREAM_SOCKET: /run/lm-studio/lm-studio.sock
+      LM_STUDIO_UPSTREAM_BASE_PATH: /v1
+      LM_STUDIO_API_KEY: ${LM_STUDIO_API_KEY:-lm-studio}
+      LM_STUDIO_MODEL_ID: ${LM_STUDIO_MODEL_ID:-qwen3.6-27b}
+    volumes:
+      - lm-studio-relay:/run/lm-studio:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      lm-studio-relay: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8050/ready')"]
+      interval: 5s
+      timeout: 6s
+      retries: 20
+    networks: [control]
+  desktop-gateway:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["uvicorn", "orchestrator.desktop_gateway_main:app", "--host", "0.0.0.0", "--port", "8030"]
+    user: "10002:10002"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://orchestrator:orchestrator-local@postgres:5432/orchestrator}
+      VM_DATA_ROOT: /var/lib/orchestrator/vms
+    volumes:
+      - vm-data:/var/lib/orchestrator/vms
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres: { condition: service_healthy }
+      vm-manager: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8030/live')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [control]
+  promotion-manager:
+    build: { context: ., dockerfile: backend/Dockerfile }
+    command: ["uvicorn", "orchestrator.promotion_manager_asgi:app", "--host", "0.0.0.0", "--port", "8040"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    group_add: ["10001"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://orchestrator:orchestrator-local@postgres:5432/orchestrator}
+      MODEL_PROVIDER: lm-studio
+      LM_STUDIO_BASE_URL: http://inference-proxy:8050/v1
+      LM_STUDIO_API_KEY: ${LM_STUDIO_API_KEY:-lm-studio}
+      LM_STUDIO_MODEL_ID: ${LM_STUDIO_MODEL_ID:-qwen3.6-27b}
+      PROJECT_ROOTS: /projects
+      VM_MANAGER_URL: http://vm-manager:8010
+      VM_MANAGER_AUTH_TOKEN: ${VM_MANAGER_AUTH_TOKEN:-local-vm-manager-token-change-me}
+      PROMOTION_MANAGER_AUTH_TOKEN: ${PROMOTION_MANAGER_AUTH_TOKEN:-local-promotion-manager-token-change-me}
+      PROMOTION_CONFIRMATION_SECRET: ${PROMOTION_CONFIRMATION_SECRET:-local-promotion-confirmation-secret-change-me-000000}
+      PROMOTION_REVIEW_ROOT: /var/lib/orchestrator/promotions
+      PROMOTION_WORKTREE_ROOT: /tmp/promotion-worktrees
+      ARTIFACT_ROOT: /var/lib/orchestrator/artifacts
+    volumes:
+      - ${PROJECT_PATH_HOST:-./projects/example}:/projects/${PROJECT_NAME:-example}:rw
+      - artifact-data:/var/lib/orchestrator/artifacts
+      - promotion-data:/var/lib/orchestrator/promotions
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      api: { condition: service_healthy }
+      vm-manager: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8040/live')"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -42,6 +253,7 @@ services:
     ports: ["3000:80"]
     depends_on:
       api: { condition: service_healthy }
+      desktop-gateway: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
       interval: 5s
@@ -56,23 +268,46 @@ services:
     networks: [control, observability]
   tempo:
     image: grafana/tempo:2.7.2
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo.yml:ro
+      - tempo-data:/var/tempo
     networks: [observability]
   loki:
     image: grafana/loki:3.4.2
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/var/loki
     networks: [observability]
   prometheus:
     image: prom/prometheus:v3.2.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
     networks: [observability]
   grafana:
     image: grafana/grafana:11.5.2
     ports: ["3001:3000"]
     depends_on: [tempo, loki, prometheus]
-    volumes: [grafana-data:/var/lib/grafana]
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks: [observability]
 networks:
   control: {}
+  egress: {}
   observability:
     internal: true
 volumes:
   postgres-data: {}
   grafana-data: {}
+  vm-data: {}
+  artifact-data: {}
+  tempo-data: {}
+  loki-data: {}
+  prometheus-data: {}
+  promotion-data: {}
+  lm-studio-relay: {}

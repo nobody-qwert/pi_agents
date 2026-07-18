@@ -30,6 +30,7 @@ def design_proposal(role: str, version: int) -> DesignProposal:
         ),
         proposed_design_version=version,
         design_artifact_id="art_design",
+        design_content="# Design\n\nA complete proposed design.",
         summary="Design proposal",
     )
 

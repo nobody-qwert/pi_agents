@@ -14,10 +14,10 @@ from orchestrator.graph import (
 
 CONFIG_ROOT = Path(__file__).resolve().parents[4] / "config"
 EXPECTED_REGISTRY_HASH = (
-    "a5f417b73885de9481396061775fb5c2f81242be048f6ff6f25442f90e747842"
+    "a581e040a851e231c049fec07725d4fcb707dfcf8ba645c6e74d84bab19c3f2d"
 )
 EXPECTED_INTAKE_CONFIG_HASH = (
-    "30ef0b2a0126653e5687175c7867f60a45dcb2ab26fb8fd97ec157d5b41cadae"
+    "ac1951656b169ee7c9e76b2384b78022c17aa241adc1e2bb62407ae3e1aad71c"
 )
 EXPECTED_INTAKE_PROMPT_HASH = (
     "a46fde5abb5570aab9d3cacde78c9dfd3e69774f91e80dfcdd166f32dfd46ce9"
@@ -119,7 +119,7 @@ def test_hidden_prompt_is_redacted_from_projection(tmp_path: Path) -> None:
         ("intake.yaml", "tools: []", "tools: [shell]", "unknown tools: shell"),
         (
             "intake.yaml",
-            "output_schema: WorkReport",
+            "output_schema: CharterProposal",
             "output_schema: InventedSchema",
             "unknown output_schema: InventedSchema",
         ),
@@ -180,6 +180,21 @@ def test_unknown_authority_field_is_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(RegistryValidationError, match="can_override_policy"):
+        load_agent_registry(root)
+
+
+def test_output_schema_must_match_the_roles_granted_authority(tmp_path: Path) -> None:
+    root = copy_registry(tmp_path)
+    replace_in(
+        root / "agents" / "intake.yaml",
+        "output_schema: CharterProposal",
+        "output_schema: WorkReport",
+    )
+
+    with pytest.raises(
+        RegistryValidationError,
+        match="output_schema requires authority: can_mutate_artifacts",
+    ):
         load_agent_registry(root)
 
 

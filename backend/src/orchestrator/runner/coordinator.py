@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Final, Literal
 
+from sqlalchemy import text
+
 from orchestrator.domain import (
     AcceptedTransition,
     AuthenticatedActor,
@@ -154,6 +156,7 @@ class RunnerCoordinator:
             stage=stage,
             target=target,
             lease=lease,
+            conversation_id=self._conversation_id_for_run(lease.run_id),
         )
 
         def state_change(unit_of_work: PostgresUnitOfWork) -> None:
@@ -171,7 +174,7 @@ class RunnerCoordinator:
                 run_id=lease.run_id,
                 requested_gate=target,
                 reason=f"Validated {stage} status selects {target}",
-                actor=self._transition_actor(),
+                actor=self._transition_actor(stage, target),
                 expected_record_version=current_run.metadata.record_version,
                 idempotency_key=command_key,
                 decided_at=datetime.now(UTC),
@@ -233,7 +236,7 @@ class RunnerCoordinator:
         draft = EventDraft(
             event_id=event_id,
             run_id=run_id,
-            conversation_id=self._conversation_id(run_id),
+            conversation_id=self._conversation_id_for_run(run_id),
             occurred_at=datetime.now(UTC),
             type="run.blocked",
             stage=run.current_gate,
@@ -250,7 +253,10 @@ class RunnerCoordinator:
             trace_id=self._trace_id(run_id),
             span_id="0123456789abcdef",
             command_idempotency_key=command_key,
-            inline_detail={"safe_state": "blocked", "reason": reason},
+            inline_detail={
+                "next_state": "blocked",
+                "policy_rule_ids": [reason.replace("_", "-")],
+            },
         )
 
         changed = False
@@ -325,8 +331,8 @@ class RunnerCoordinator:
         stage: ControlStage,
         target: ControlStage,
         lease: RunLease,
+        conversation_id: str,
     ) -> EventDraft:
-        terminal = target in {"COMPLETE", "BLOCKED"}
         status: EventStatus = (
             "completed"
             if target == "COMPLETE"
@@ -337,7 +343,7 @@ class RunnerCoordinator:
         return EventDraft(
             event_id=event_id,
             run_id=run_id,
-            conversation_id=self._conversation_id(run_id),
+            conversation_id=conversation_id,
             occurred_at=datetime.now(UTC),
             type="run.completed"
             if target == "COMPLETE"
@@ -360,15 +366,24 @@ class RunnerCoordinator:
             command_idempotency_key=command_key,
             transition_id=transition_id,
             inline_detail={
-                "source_gate": stage,
-                "target_gate": target,
-                "terminal": terminal,
+                "previous_state": stage,
+                "next_state": target,
             },
         )
 
     @staticmethod
-    def _transition_actor() -> AuthenticatedActor:
+    def _transition_actor(
+        stage: ControlStage, target: ControlStage
+    ) -> AuthenticatedActor:
         now = datetime.now(UTC)
+        if stage == "OUTCOME_VERIFY" and target == "COMPLETE":
+            return AuthenticatedActor(
+                actor_id="service_assurance",
+                kind="service",
+                role="assurance",
+                authenticated_at=now,
+                authentication_context="runner-service",
+            )
         return AuthenticatedActor(
             actor_id="service_transition",
             kind="service",
@@ -391,9 +406,18 @@ class RunnerCoordinator:
     def _trace_id(run_id: str) -> str:
         return sha256(run_id.encode()).hexdigest()[:32]
 
-    @staticmethod
-    def _conversation_id(run_id: str) -> str:
-        return f"conv_{sha256(run_id.encode()).hexdigest()[:32]}"
+    def _conversation_id_for_run(self, run_id: str) -> str:
+        """Use the command-owned conversation projection for every runner event.
+
+        Legacy/test records predate that projection, so they retain a stable
+        deterministic fallback instead of making recovery impossible.
+        """
+        with self._unit_of_work.transaction() as unit_of_work:
+            value = unit_of_work.connection.execute(
+                text("SELECT conversation_id FROM runs WHERE run_id = :run_id"),
+                {"run_id": run_id},
+            ).scalar_one_or_none()
+        return str(value) if value else f"conv_{sha256(run_id.encode()).hexdigest()[:32]}"
 
     @staticmethod
     def _attempt_id(run_id: str, attempt: int) -> str:

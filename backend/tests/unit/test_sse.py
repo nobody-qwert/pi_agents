@@ -13,6 +13,9 @@ class Store:
             return ()
         return tuple(event for event in EVENTS if event.sequence > after_sequence)
 
+    def detail(self, *, run_id: str, event_id: str, user_id: str) -> dict[str, object]:
+        return {"category": "transition", "summary": event_id, "fields": []}
+
 
 EVENTS = (
     StreamEvent(1, "evt_one", "run.started", {"status": "running"}),
@@ -46,6 +49,11 @@ def test_sse_rejects_invalid_cursor_and_sequence_gaps() -> None:
             self, *, run_id: str, user_id: str, after_sequence: int
         ) -> tuple[StreamEvent, ...]:
             return (StreamEvent(2, "evt_two", "run.started", {}),)
+
+        def detail(
+            self, *, run_id: str, event_id: str, user_id: str
+        ) -> dict[str, object]:
+            return {}
 
     with pytest.raises(EventStreamError, match="non_contiguous_event_sequence"):
         SseEventService(GapStore()).replay(

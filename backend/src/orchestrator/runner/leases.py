@@ -35,6 +35,10 @@ class LeaseCancelledError(LeaseError):
     """Cancellation was requested before the holder could commit work."""
 
 
+class AutomationPausedError(LeaseError):
+    """A human input-owner transition fenced further guest automation."""
+
+
 class LeaseBudgetExhaustedError(LeaseError):
     """The run consumed its configured lease-attempt budget."""
 
@@ -125,6 +129,8 @@ class PostgresRunLeaseQueue:
                         " SELECT run_id FROM run_queue "
                         " WHERE available_at <= :now AND completed_at IS NULL "
                         "   AND cancellation_requested_at IS NULL "
+                        "   AND NOT EXISTS (SELECT 1 FROM workspace_input_ownership AS input "
+                        "     WHERE input.run_id = run_queue.run_id AND input.owner <> 'AGENT') "
                         "   AND attempt_count < max_attempts "
                         "   AND (lease_expires_at IS NULL OR lease_expires_at <= :now) "
                         " ORDER BY available_at, run_id FOR UPDATE SKIP LOCKED LIMIT 1"
@@ -338,7 +344,7 @@ class PostgresRunLeaseQueue:
                 .mappings()
                 .one_or_none()
             )
-        return QueueEntry.model_validate(row) if row else None
+        return QueueEntry.model_validate(dict(row)) if row else None
 
     def _claim(self, *, run_id: RunId, owner: str, now: datetime) -> LeaseClaim:
         with self._engine.begin() as connection:
@@ -350,6 +356,8 @@ class PostgresRunLeaseQueue:
                         "attempt_count = attempt_count + 1, updated_at = :now "
                         "WHERE run_id = :run_id AND available_at <= :now "
                         "AND completed_at IS NULL AND cancellation_requested_at IS NULL "
+                        "AND NOT EXISTS (SELECT 1 FROM workspace_input_ownership AS input "
+                        "  WHERE input.run_id = run_queue.run_id AND input.owner <> 'AGENT') "
                         "AND attempt_count < max_attempts "
                         "AND (lease_expires_at IS NULL OR lease_expires_at <= :now) "
                         "RETURNING run_id, lease_owner, lease_token, lease_epoch, attempt_count, lease_expires_at"

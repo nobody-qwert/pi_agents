@@ -14,7 +14,7 @@ execution:
   allow_parallel: false
 tools: []
 input_schema: CharterRecord
-output_schema: WorkReport
+output_schema: CharterProposal
 authority:
   can_propose_charter: true
 visibility:

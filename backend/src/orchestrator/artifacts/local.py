@@ -17,12 +17,12 @@ class LocalVolumeArtifactStore:
 
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
-        self._root.mkdir(parents=True, exist_ok=True)
+        self._root.mkdir(parents=True, exist_ok=True, mode=0o2770)
 
     def put_if_absent(self, record: ArtifactVersionRecord, content: bytes) -> bool:
         self._assert_content_matches(record, content)
         target = self._path_for(record)
-        target.parent.mkdir(parents=True, exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o2770)
         temporary = target.with_name(f".{target.name}.{secrets.token_hex(16)}.tmp")
         try:
             with temporary.open("xb") as handle:

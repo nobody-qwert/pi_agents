@@ -49,6 +49,7 @@ def settings() -> AppSettings:
         {
             "app_env": "test",
             "app_base_url": "http://localhost:3000",
+            "database_url": "postgresql+psycopg://test:test@postgres/test",
             "model_provider": "lm-studio",
             "lm_studio_base_url": "http://lm-studio:1234/v1",
             "lm_studio_api_key": "not-a-real-secret",

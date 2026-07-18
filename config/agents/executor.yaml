@@ -12,7 +12,7 @@ execution:
   timeout_seconds: 300
   max_attempts: 2
   allow_parallel: false
-tools: []
+tools: [read, write, edit, bash, grep, find, ls, browser_navigate, browser_snapshot, browser_click, browser_input, browser_screenshot, browser_console, browser_network]
 input_schema: WorkNodeRecord
 output_schema: WorkReport
 authority:

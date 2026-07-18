@@ -1,0 +1,6 @@
+services:
+  vm-manager:
+    devices:
+      - /dev/kvm:/dev/kvm
+    group_add:
+      - "${KVM_GID:-108}"

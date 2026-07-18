@@ -1,0 +1,9 @@
+{
+  "name": "orchestrator-sealed-pi-tools",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}

@@ -8,6 +8,7 @@ does not accept the result into authoritative state.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
@@ -18,7 +19,11 @@ from orchestrator.artifacts import ArtifactService
 from orchestrator.artifacts.models import ArtifactAccessRequest, ArtifactReference
 from orchestrator.domain import (
     ApprovalProposal,
+    CharterProposal,
+    DesignCritiqueReport,
     DesignProposal,
+    IntegrationReport,
+    InvestigationReport,
     IssueReport,
     OutcomeEvidence,
     ProposedWorkPlan,
@@ -32,7 +37,11 @@ from orchestrator.model_gateway import GatewayFailure, ModelGateway, ModelReques
 
 _UNTRUSTED_RESULT_TYPES: Final[tuple[type[StrictDomainModel], ...]] = (
     ApprovalProposal,
+    CharterProposal,
+    DesignCritiqueReport,
     DesignProposal,
+    IntegrationReport,
+    InvestigationReport,
     IssueReport,
     OutcomeEvidence,
     ProposedWorkPlan,
@@ -64,6 +73,7 @@ class InvocationInput:
     work_node_id: WorkNodeId | None
     tenant_id: str
     input_artifacts: tuple[ArtifactReference, ...] = ()
+    context_payload: Mapping[str, object] | None = None
     max_context_bytes: int = 1_000_000
 
 
@@ -75,6 +85,9 @@ class InvocationResult:
     config_hash: str
     prompt_hash: str
     model_id: str
+    finish_reason: str | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
 
 
 class AgentInvocationService:
@@ -84,7 +97,7 @@ class AgentInvocationService:
         self,
         registry: AgentRegistry,
         gateway: ModelGateway,
-        artifacts: ArtifactService,
+        artifacts: ArtifactService | None,
     ) -> None:
         self._registry = registry
         self._gateway = gateway
@@ -100,7 +113,7 @@ class AgentInvocationService:
         output_type = SCHEMA_REGISTRY.get(definition.config.output_schema)
         if output_type is None or output_type not in _UNTRUSTED_RESULT_TYPES:
             raise InvocationRejected("unsafe_output_schema")
-        context = self._assemble_context(invocation)
+        context = self._assemble_context(invocation, output_type)
         try:
             response = self._gateway.complete(
                 ModelRequest(
@@ -130,12 +143,21 @@ class AgentInvocationService:
             config_hash=definition.config_hash,
             prompt_hash=definition.prompt_hash,
             model_id=response.model_id,
+            finish_reason=response.finish_reason,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
         )
 
-    def _assemble_context(self, invocation: InvocationInput) -> str:
+    def _assemble_context(
+        self,
+        invocation: InvocationInput,
+        output_type: type[StrictDomainModel],
+    ) -> str:
         sections: list[dict[str, object]] = []
         total_bytes = 0
         for reference in invocation.input_artifacts:
+            if self._artifacts is None:
+                raise InvocationRejected("artifact_service_unavailable")
             result = self._artifacts.read(
                 reference,
                 ArtifactAccessRequest(
@@ -165,9 +187,19 @@ class AgentInvocationService:
             "design_version": invocation.design_version,
             "work_node_id": invocation.work_node_id,
             "artifacts": sections,
+            "context": dict(invocation.context_payload or {}),
+            "output_schema": output_type.model_json_schema(),
             "response_instruction": "Return only one JSON object matching your configured output schema.",
         }
-        return json.dumps(envelope, sort_keys=True, separators=(",", ":"))
+        try:
+            encoded = json.dumps(
+                envelope, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+        except (TypeError, ValueError) as error:
+            raise InvocationRejected("invalid_context_payload") from error
+        if len(encoded.encode("utf-8")) > invocation.max_context_bytes:
+            raise InvocationRejected("context_too_large")
+        return encoded
 
     @staticmethod
     def _validate_provenance(
@@ -195,7 +227,11 @@ class AgentInvocationService:
         result: StrictDomainModel, capabilities: frozenset[str]
     ) -> None:
         requirements: tuple[tuple[type[StrictDomainModel], str], ...] = (
+            (CharterProposal, "can_propose_charter"),
             (DesignProposal, "can_propose_design"),
+            (DesignCritiqueReport, "can_recommend_design_acceptance"),
+            (InvestigationReport, "can_investigate_current_state"),
+            (IntegrationReport, "can_integrate"),
             (ProposedWorkPlan, "can_propose_work_plan"),
             (IssueReport, "can_triage"),
             (VerificationReport, "can_verify_local"),

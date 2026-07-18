@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import Field
 
-from orchestrator.domain.primitives import NonEmptyStr, StrictDomainModel
+from orchestrator.domain.primitives import LongText, NonEmptyStr, StrictDomainModel
 from orchestrator.settings import AppSettings
 
 
@@ -54,7 +54,7 @@ class ModelRequest(StrictDomainModel):
 
     agent_id: NonEmptyStr
     system_prompt: NonEmptyStr
-    user_prompt: NonEmptyStr
+    user_prompt: LongText
     max_output_tokens: int = Field(ge=1, le=16_384)
     temperature: float = Field(ge=0, le=2)
 

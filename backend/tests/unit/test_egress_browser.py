@@ -9,7 +9,12 @@ from orchestrator.browser_runtime import (
     BrowserRuntime,
     BrowserRuntimeError,
 )
-from orchestrator.egress import ApprovedDestination, EgressDenied, EgressPolicy
+from orchestrator.egress import (
+    ApprovedDestination,
+    EgressDenied,
+    EgressPolicy,
+    issue_egress_token,
+)
 
 
 class Resolver:
@@ -66,15 +71,25 @@ def test_egress_blocks_private_resolution_and_dns_rebinding() -> None:
         configured.validate_connection(approved, "8.8.8.8")
 
 
+def test_egress_credentials_are_run_scoped_and_require_a_strong_secret() -> None:
+    secret = "test-egress-secret-000000000000000000000000"
+    first = issue_egress_token(secret, "run_0123456789abcdef01234567")
+    assert len(first) == 64
+    assert first == issue_egress_token(secret, "run_0123456789abcdef01234567")
+    assert first != issue_egress_token(secret, "run_1123456789abcdef01234567")
+    with pytest.raises(ValueError, match="invalid egress token input"):
+        issue_egress_token("short", "run_0123456789abcdef01234567")
+
+
 def test_browser_actions_are_role_scoped_and_bounded() -> None:
     runtime = BrowserRuntime(Browser(), policy())
     with pytest.raises(BrowserRuntimeError, match="browser_action_not_permitted"):
         runtime.execute(
             role="local-verifier",
-            request=BrowserRequest(action="navigate", url="https://public.example/"),
+            request=BrowserRequest(action="click", selector="#danger"),
         )
     navigated = runtime.execute(
-        role="executor",
+        role="local-verifier",
         request=BrowserRequest(
             action="navigate", url="https://public.example/", max_output_bytes=12
         ),

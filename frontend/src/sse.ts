@@ -14,15 +14,16 @@ export function parseSseFrames(source: string): SseFrame[] {
 export class RunEventClient {
   private stopped = false;
   private retry = 250;
+  private cursor = 0;
   constructor(private readonly runId: string, private readonly onEvent: (event: RunEvent) => void, private readonly onError: (message: string) => void = () => {}) {}
   start() { this.stopped = false; void this.connect(); }
   stop() { this.stopped = true; }
   private async connect(): Promise<void> {
     try {
-      const response = await fetch("/api/v1/runs/" + this.runId + "/events", { headers: { Accept: "text/event-stream", "X-Dev-User": "user_local", "Last-Event-ID": String(storedCursor(this.runId)) } });
+      const response = await fetch("/api/v1/runs/" + this.runId + "/events", { headers: { Accept: "text/event-stream", "X-Dev-User": "user_local", "Last-Event-ID": String(this.cursor) } });
       if (!response.ok || !response.body) throw new Error("event_stream_unavailable");
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let terminal = false;
-      while (!this.stopped) { const chunk = await reader.read(); if (chunk.done) break; buffer += decoder.decode(chunk.value, { stream: true }); const boundary = buffer.lastIndexOf("\n\n"); if (boundary < 0) continue; for (const frame of parseSseFrames(buffer.slice(0, boundary))) { const event = runEventSchema.parse({ ...JSON.parse(frame.data ?? "{}"), type: frame.event ?? "unknown", sequence: Number(frame.id) }); if (event.sequence > storedCursor(this.runId)) { saveCursor(this.runId, event.sequence); this.onEvent(event); } terminal ||= ["run.completed", "run.failed", "run.blocked"].includes(event.type); } buffer = buffer.slice(boundary + 2); }
+      while (!this.stopped) { const chunk = await reader.read(); if (chunk.done) break; buffer += decoder.decode(chunk.value, { stream: true }); const boundary = buffer.lastIndexOf("\n\n"); if (boundary < 0) continue; for (const frame of parseSseFrames(buffer.slice(0, boundary))) { const event = runEventSchema.parse({ ...JSON.parse(frame.data ?? "{}"), type: frame.event ?? "unknown", sequence: Number(frame.id) }); if (event.sequence > this.cursor) { this.cursor = event.sequence; saveCursor(this.runId, event.sequence); this.onEvent(event); } terminal ||= ["run.completed", "run.failed", "run.blocked"].includes(event.type); } buffer = buffer.slice(boundary + 2); }
       if (terminal) return;
     } catch (error) { this.onError(error instanceof Error ? error.message : "event_stream_unavailable"); }
     if (!this.stopped) { await new Promise((resolve) => window.setTimeout(resolve, this.retry)); this.retry = Math.min(this.retry * 2, 8_000); await this.connect(); }

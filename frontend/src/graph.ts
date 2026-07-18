@@ -1,6 +1,6 @@
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { Edge, Node } from "@xyflow/react";
-import type { GraphNode, GraphProjection } from "./api";
+import type { GraphNode, GraphProjection, WorkGraph } from "./api";
 
 export type StageStatus = "active" | "completed" | "failed" | "approval" | "blocked" | "pending";
 export type RunOverlay = Readonly<Record<string, { status: StageStatus; duration?: string }>>;
@@ -10,6 +10,16 @@ export type StageFlowNode = Node<StageNodeData, "stage">;
 const elk = new ELK();
 const nodeWidth = 224;
 const nodeHeight = 104;
+
+export function workGraphProjection(runId: string, graph: WorkGraph): { graph: GraphProjection; overlay: RunOverlay } {
+  const known = new Set(graph.nodes.map((node) => node.work_node_id));
+  const edges = graph.edges.filter((edge) => known.has(edge.from_work_node_id) && known.has(edge.to_work_node_id)).map((edge) => ({ source: edge.from_work_node_id, target: edge.to_work_node_id, condition: edge.edge_type }));
+  const status = (value: string): StageStatus => value === "READY" || value === "IN_PROGRESS" ? "active" : ["LOCALLY_VERIFIED", "INTEGRATED", "VERIFIED"].includes(value) ? "completed" : ["BLOCKED", "INVALIDATED", "CHANGE_REQUESTED"].includes(value) ? "blocked" : "pending";
+  return {
+    graph: { entry_node: graph.nodes.find((node) => node.parent_id === null)?.work_node_id ?? graph.nodes[0]?.work_node_id ?? "EMPTY", registry_hash: runId, nodes: graph.nodes.map((node) => ({ node_id: node.work_node_id, description: node.goal, agent_id: null, agent: null })), edges },
+    overlay: Object.fromEntries(graph.nodes.map((node) => [node.work_node_id, { status: status(node.status), duration: node.status.replaceAll("_", " ").toLowerCase() }])),
+  };
+}
 
 export function graphElements(graph: GraphProjection, overlay: RunOverlay = {}): { nodes: StageFlowNode[]; edges: Edge[] } {
   const nodes: StageFlowNode[] = graph.nodes.map((stage) => ({ id: stage.node_id, type: "stage", position: { x: 0, y: 0 }, data: { stage, overlay: overlay[stage.node_id] } }));

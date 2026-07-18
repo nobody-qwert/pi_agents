@@ -6,6 +6,7 @@ from typing import Literal
 
 from orchestrator.domain.primitives import (
     ArtifactId,
+    CriterionId,
     CriterionResult,
     EvidenceResult,
     IssueClassification,
@@ -32,6 +33,34 @@ class WorkReport(StrictDomainModel):
     output_artifact_ids: tuple[ArtifactId, ...] = ()
     checks: tuple[NonEmptyStr, ...] = ()
     risks: tuple[NonEmptyStr, ...] = ()
+    issues: tuple[NonEmptyStr, ...] = ()
+
+
+class InvestigationReport(StrictDomainModel):
+    kind: Literal["investigation_report"] = "investigation_report"
+    context: ReportContext
+    findings: tuple[NonEmptyStr, ...]
+    evidence_artifact_ids: tuple[ArtifactId, ...] = ()
+    evidence_gaps: tuple[NonEmptyStr, ...] = ()
+    blockers: tuple[NonEmptyStr, ...] = ()
+
+
+class DesignCritiqueReport(StrictDomainModel):
+    kind: Literal["design_critique_report"] = "design_critique_report"
+    context: ReportContext
+    verdict: Literal["accepted", "revision", "blocked"]
+    uncovered_criterion_ids: tuple[CriterionId, ...] = ()
+    contradictions: tuple[NonEmptyStr, ...] = ()
+    authority_questions: tuple[NonEmptyStr, ...] = ()
+    summary: NonEmptyStr
+
+
+class IntegrationReport(StrictDomainModel):
+    kind: Literal["integration_report"] = "integration_report"
+    context: ReportContext
+    status: Literal["integrated", "issue", "blocked"]
+    integrated_artifact_ids: tuple[ArtifactId, ...] = ()
+    interfaces_checked: tuple[NonEmptyStr, ...] = ()
     issues: tuple[NonEmptyStr, ...] = ()
 
 

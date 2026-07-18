@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from orchestrator.domain.primitives import (
+    AcceptanceCriterion,
     AgentActor,
     ApprovalDecision,
     ArtifactId,
@@ -14,9 +15,11 @@ from orchestrator.domain.primitives import (
     DesignReference,
     DesignVersion,
     EvidenceResult,
+    LongText,
     NonEmptyStr,
     ProposalId,
     RelativePath,
+    RiskClass,
     RunId,
     ShortStr,
     StrictDomainModel,
@@ -80,6 +83,25 @@ class ProposedWorkPlan(StrictDomainModel):
     nodes: tuple[WorkNodeProposal, ...]
 
 
+class CharterProposal(StrictDomainModel):
+    """Untrusted intake draft accepted only by the charter application service."""
+
+    kind: Literal["charter_proposal"] = "charter_proposal"
+    context: SubmissionContext
+    requested_outcome: NonEmptyStr
+    intended_users: tuple[ShortStr, ...]
+    included_scope: tuple[NonEmptyStr, ...]
+    excluded_scope: tuple[NonEmptyStr, ...]
+    assumptions: tuple[NonEmptyStr, ...] = ()
+    constraints: tuple[NonEmptyStr, ...] = ()
+    protected_artifacts: tuple[RelativePath, ...] = ()
+    acceptance_criteria: tuple[AcceptanceCriterion, ...]
+    authority_questions: tuple[NonEmptyStr, ...] = ()
+    required_approvals: tuple[AuthorityScope, ...] = ()
+    risk_class: RiskClass
+    evidence_expectations: tuple[NonEmptyStr, ...]
+
+
 class ApprovalProposal(StrictDomainModel):
     """An agent recommendation, never an authenticated approval decision."""
 
@@ -118,4 +140,5 @@ class DesignProposal(StrictDomainModel):
     context: SubmissionContext
     proposed_design_version: DesignVersion
     design_artifact_id: ArtifactId
+    design_content: LongText
     summary: NonEmptyStr

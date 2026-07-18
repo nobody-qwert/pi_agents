@@ -16,8 +16,9 @@ credential fallbacks:
 ```text
 APP_ENV=development
 APP_BASE_URL=http://localhost:3000
+DATABASE_URL=postgresql+psycopg://orchestrator:orchestrator-local@localhost:5432/orchestrator
 MODEL_PROVIDER=lm-studio
-LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
 LM_STUDIO_API_KEY=lm-studio
 LM_STUDIO_MODEL_ID=qwen3.6-27b
 ```

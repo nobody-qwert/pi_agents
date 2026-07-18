@@ -43,6 +43,10 @@ NonEmptyStr = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=4096),
 ]
+LongText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=262_144),
+]
 ShortStr = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=256),
