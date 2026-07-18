@@ -1,10 +1,9 @@
 # Durable Design Package
 
-Every implementation task is anchored to one reviewed design package stored in
-the target repository. The package records durable intent; task packets remain
-the bounded execution contract for one worker.
+Every implementation task is anchored to one reviewed design package. The
+package records durable intent; task packets are bounded execution contracts.
 
-## Required reviewed layout
+## Required layout
 
 ```text
 docs/design/<design-id>/
@@ -16,36 +15,31 @@ docs/design/<design-id>/
 └── status.md
 ```
 
-`<design-id>` is a stable lowercase kebab-case identifier. Semantic design files
-(`index.md`, `high-level.md`, `implementation-plan.md`, and `modules/*.md`) are
-written only by the design workflow. `status.md` is written only by the status
-writer. Coding workers never edit either group.
+`<design-id>` is stable lowercase kebab-case. The design workflow alone writes
+semantic files (`index.md`, `high-level.md`, `implementation-plan.md`, and
+`modules/*.md`). The status writer alone writes `status.md`. Coding workers never
+edit `docs/design/**`.
 
-Before first design acceptance, the semantic candidate contains `index.md`,
-`high-level.md`, `implementation-plan.md`, and `modules/*.md`; `status.md` may be
-absent. The status writer may create it after the design verifier accepts the
-candidate or after a terminal design rejection has enough safe ID/revision/path
-metadata to persist `BLOCKED`. The design author never creates it. When
-maintaining an existing package, the design author leaves the existing ledger
-byte-for-byte unchanged.
+Before first acceptance, `status.md` may be absent. The status writer may create
+it after verifier acceptance or a safely identified terminal design rejection.
+The design author never creates or edits it.
 
-## Reference and revision rules
+## References and revisions
 
-- `DESIGN_REVISION` is a positive, monotonically increasing integer.
-- Any normative change to a semantic design file increments the revision.
-  Status-only changes do not.
-- Normative requirements use exactly one Markdown heading in the form
-  `## HLD-001 — <title>` or `## MOD-AUTH-001 — <title>`. IDs are unique across
-  the package and never reused with changed meaning.
-- Task packets reference requirements as `<path>::<requirement-id>`, never by
-  line number or an automatically generated Markdown anchor.
-- Each packet anchors `index.md`, `implementation-plan.md`, and every referenced
-  high-level/module file by its `git hash-object` blob ID. A revision,
-  requirement, plan, or blob mismatch makes the packet stale.
-- A design is runnable only when `status.md` says `DESIGN_STATUS: READY`, its
-  `REVIEWED_REVISION` equals the index revision, and its recorded design-verifier
-  verdict is `ACCEPT`. Every current semantic-file blob ID must also match the
-  verifier-authored `REVIEWED_FINGERPRINTS` persisted in the ledger.
+- `DESIGN_REVISION` is a positive monotonically increasing integer.
+- Every normative semantic change increments it; status-only changes do not.
+- Normative requirements use one canonical heading such as
+  `## HLD-001 — <title>` or `## MOD-AUTH-001 — <title>` and never reuse an ID
+  with changed meaning.
+- Packets reference requirements as `<path>::<requirement-id>`.
+- Each packet fingerprints `index.md`, `implementation-plan.md`, and every
+  referenced high-level/module file. A mismatch makes the packet stale.
+- A design is runnable only when `status.md` says `READY`, its reviewed revision
+  equals the index revision, its verdict is `ACCEPT`, and every semantic file
+  matches `REVIEWED_FINGERPRINTS`.
+
+These fingerprints identify document content. They may be computed from the
+working tree and do not require a clean repository or committed files.
 
 ## `index.md`
 
@@ -64,46 +58,27 @@ DESIGN_REVISION: <positive integer>
 - modules/<module-id>.md
 ```
 
-The document inventory is exhaustive for semantic files in the current
-revision. `status.md` is intentionally excluded because it is not semantic
-design content.
+The inventory is exhaustive for semantic files; `status.md` is excluded.
 
 ## `high-level.md`
 
-The high-level design records:
-
-- goals and explicit non-goals;
-- system boundaries and component responsibilities;
-- dependency direction and principal data/control flows;
-- cross-module contracts and invariants;
-- compatibility, migration, and rollout constraints;
-- material alternatives, decisions, and risks;
-- links to every affected module specification.
-
-Every normative statement that can constrain implementation is placed under one
-exact `## HLD-NNN — <title>` requirement heading.
+Record goals and non-goals, boundaries and ownership, dependency direction,
+principal flows, cross-module contracts and invariants, compatibility/migration
+constraints, material alternatives, decisions, risks, and links to affected
+module specifications. Put every normative statement under one exact
+`## HLD-NNN — <title>` heading.
 
 ## `modules/<module-id>.md`
 
-Each affected module receives one detailed design containing:
-
-- `MODULE_ID` and its owned responsibility;
-- non-responsibilities and boundary with neighboring modules;
-- public and internal interfaces or contracts;
-- allowed dependencies and owned state/data;
-- important behavior and flows;
-- failure and recovery semantics;
-- module invariants and compatibility constraints;
-- verification strategy.
-
-Normative module requirements use exact headings such as
-`## MOD-<MODULE>-NNN — <title>`.
-Detailed designs describe contracts and invariants, not a line-by-line preview
-of the implementation.
+Each affected module records its ID and responsibility, non-responsibilities,
+interfaces, allowed dependencies, owned state, important behavior, failure and
+recovery semantics, invariants, compatibility constraints, and verification
+strategy. Normative headings use `## MOD-<MODULE>-NNN — <title>`. Describe stable
+contracts rather than predicting code line by line.
 
 ## `implementation-plan.md`
 
-The plan contains one section per independently verifiable implementation task:
+Use one section per independently verifiable task:
 
 ```text
 ## <TASK_ID>
@@ -130,32 +105,17 @@ DEPENDS_ON:
 ACCEPTANCE_COMMANDS:
 - <exact bounded command>
 
-COMMAND_ARTIFACTS:
-- <exact repository-relative artifact path or directory root, or none>
-
 CONSTRAINTS:
 - <public behavior or boundary that remains unchanged>
 ```
 
-The plan owns stable intent and dependencies. A runtime task packet must agree
-with its plan entry while adding the current protected-path baseline, repository
-facts, failed-approach fingerprints, and blob IDs for the index, plan, and
-referenced design files.
-
-`COMMAND_ARTIFACTS` is the complete pre-authorization for files that acceptance
-commands may create or modify. Entries are exact repository-relative paths or
-bounded directory roots, never globs or a repository-wide root. A worker report
-cannot add authorization retrospectively; any undeclared command artifact fails
-scope verification. Entries may not overlap protected paths or `docs/design/**`
-and authorize command residue only, never implementation edits.
-Every command boundary compares a complete repository filesystem inventory—path,
-type, and content or symlink-target fingerprint—before and after execution,
-excluding only VCS internals such as `.git/**`. This inventory, not Git status
-alone, detects ignored and empty-directory residue.
+Tasks own stable intent and dependencies. Expected paths guide investigation and
+implementation but are never an exhaustive allowlist. Acceptance commands are
+executed by the worker, independent verifier, and outer supervisor.
 
 ## `status.md`
 
-The status file is a verifier-backed ledger, not an agent work diary:
+The status file is a verifier-backed ledger, not an agent diary:
 
 ```text
 # Design and implementation status
@@ -167,7 +127,7 @@ REVIEWED_REVISION: <positive integer, or none>
 DESIGN_VERDICT: ACCEPT | REJECT | none
 
 REVIEWED_FINGERPRINTS:
-- <semantic design path>: <design-verifier git blob id>, or none
+- <semantic design path>: <design-verifier content fingerprint>, or none
 
 DESIGN_EVIDENCE:
 - <design-verifier verdict and decisive evidence, or none>
@@ -182,80 +142,37 @@ DESIGN_REFS:
 VERIFIER_VERDICT: ACCEPT | REJECT | none
 REVIEWER_VERDICT: ACCEPT | REJECT | NOT_REQUIRED | none
 FINAL_VERIFICATION: PENDING | PASS | FAIL | NOT_RUN
-INNER_STATE_FINGERPRINTS:
-- <non-status path or absent marker>: <fingerprint>, or none
-FINAL_STATE_FINGERPRINTS:
-- <non-status path or absent marker>: <fingerprint>, or none
 EVIDENCE:
 - <exact command/verdict/path, or none>
 BLOCKER: <failure fingerprint, or none>
 ```
 
-`REVIEWED_FINGERPRINTS` always describes `REVIEWED_REVISION`, which may differ
-from the current `DESIGN_REVISION` while a newer candidate is blocked. It is
-`none` when no revision has ever been accepted.
+`REVIEWED_FINGERPRINTS` describes `REVIEWED_REVISION`, which may differ from a
+new blocked candidate revision. It is `none` when nothing has been accepted.
+`DESIGN_VERDICT` records only an actual verifier verdict; design drift or outer
+rejection must not fabricate `REJECT`.
 
-`INNER_STATE_FINGERPRINTS` is captured after the implementation verifier and any
-required reviewer accept. It covers the complete cumulative task implementation
-path set, all reviewed semantic design files, every pre-authorized command
-artifact, and protected-path content/absence. `FINAL_STATE_FINGERPRINTS` covers
-the same classes after the outer supervisor reruns the exact command manifest.
-Both manifests exclude `status.md` and use explicit absent markers.
-For any protected or command-artifact directory root, expand the snapshot to an
-exhaustive sorted descendant-path inventory with one content/absence entry per
-path; a later added or removed descendant is a mismatch. The package ledger is
-the sole exclusion and is guarded separately by its compare-and-set fingerprint.
+Only durable workflow facts are recorded. Worker claims such as `IN_PROGRESS`
+or `IMPLEMENTED` are not persisted. The ledger contains no implementation
+workspace fingerprints.
 
-For `VERIFIED_PENDING_FINAL`, `INNER_STATE_FINGERPRINTS` is the authoritative
-snapshot; for `COMPLETE`, `FINAL_STATE_FINGERPRINTS` is authoritative. A manifest
-matches only when its exact path/absence inventory and every fingerprint
-recompute identically. These snapshots are immutable while the task remains in
-that state.
+Allowed transitions:
 
-`DESIGN_VERDICT` records only an actual design-verifier verdict. A typed design
-drift or failed outer design check sets `DESIGN_STATUS: BLOCKED` and records the
-failure in `DESIGN_EVIDENCE`; it does not fabricate a verifier `REJECT`. When the
-blocked revision is the previously accepted revision, its historical `ACCEPT`
-verdict remains recorded.
+- design-verifier `ACCEPT` authorizes design `READY`;
+- verifier rejection, unresolved design conflict, or failed outer design check
+  authorizes design `BLOCKED`;
+- a new ready design revision replaces current task entries as `PLANNED`;
+- implementation verifier `ACCEPT` plus required reviewer `ACCEPT` authorizes
+  `PLANNED -> VERIFIED_PENDING_FINAL`;
+- successful outer execution of the exact command manifest authorizes
+  `VERIFIED_PENDING_FINAL -> COMPLETE`;
+- terminal failure authorizes the affected task and unfinished dependants to
+  become `BLOCKED`;
+- materially new investigation/debugger evidence or a newly reverified
+  prerequisite may authorize `BLOCKED -> PLANNED`.
 
-Only durable facts are recorded. Worker claims such as `IN_PROGRESS` or
-`IMPLEMENTED` are deliberately not persisted.
-
-Allowed transitions are:
-
-- a design-verifier `ACCEPT` authorizes `DESIGN_STATUS: READY`; accepting a new
-  revision replaces the ledger revision and resets its current tasks;
-- a design-verifier rejection or unresolved design conflict authorizes
-  `DESIGN_STATUS: BLOCKED`;
-- an outer design supervisor rejection authorizes `READY -> BLOCKED` while
-  retaining the accepted revision and reviewed fingerprints as historical
-  evidence;
-- a new design revision resets all current plan tasks to `PLANNED`;
-- verifier `ACCEPT` plus any required reviewer `ACCEPT` authorizes
-  `PLANNED -> VERIFIED_PENDING_FINAL` and persists the checked inner-state
-  fingerprint manifest;
-- the outer supervisor's successful independent checks authorize
-  `VERIFIED_PENDING_FINAL -> COMPLETE` and persist the exact checked non-status
-  fingerprints;
-- a terminal task failure authorizes the affected `PLANNED` or pending task and
-  any pending/complete transitive dependants whose evidence relies on it to move
-  to `BLOCKED`;
-- new investigation/debugger evidence or a newly reverified failed dependency
-  may authorize `BLOCKED -> PLANNED`;
-- an exact mismatch in a pending task's inner snapshot or a complete task's
-  final snapshot authorizes one atomic reset to `PLANNED` of the stale task and
-  every transitive dependant currently pending or complete; the reset clears all
-  verdict, verification, fingerprint, evidence, and blocker fields before
-  topological revalidation;
-- invalidating a design revision is a distinct package-wide transaction that may
-  move any current-plan task, including `COMPLETE`, to `BLOCKED`; the previous
-  completion evidence remains available in Git history.
-
-Dependent implementation may begin only when every task in the full transitive
-prerequisite closure is either
-`VERIFIED_PENDING_FINAL` with currently matching `INNER_STATE_FINGERPRINTS` or
-`COMPLETE` with currently matching `FINAL_STATE_FINGERPRINTS`. Finalization also
-requires every prerequisite outside the atomic task set to be matching
-`COMPLETE`, and every prerequisite inside it to be a matching pending or complete
-task. User-facing completion requires `COMPLETE`. The status writer applies
-transitions and dependency checks mechanically and never decides them.
+A dependent task may begin when every transitive prerequisite is
+`VERIFIED_PENDING_FINAL` or `COMPLETE`. Finalization is dependency-closed and
+user-facing completion requires `COMPLETE`. The status writer applies authorized
+transitions mechanically using the current `status.md` content fingerprint as a
+compare-and-set guard.

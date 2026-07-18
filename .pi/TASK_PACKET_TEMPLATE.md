@@ -1,21 +1,16 @@
 # Lean Task Packet
 
-This template defines the handoff contract for delegated tasks.
+This template defines the design-anchored handoff for one implementation task.
+It must agree with the applicable package's `implementation-plan.md` entry.
 
-Every packet must follow `.pi/DESIGN_PACKAGE_TEMPLATE.md` and agree with its
-task entry in the applicable package's `implementation-plan.md` under
-`docs/design/<design-id>/`. A packet is runnable only when the design is reviewed
-and ready, every reference resolves, and every recorded blob ID still matches.
-Each packet fingerprint must equal the corresponding entry in the design
-verifier's complete `REVIEWED_FINGERPRINTS` manifest in `status.md`. Otherwise return
-`NEEDS_DESIGN_CHANGE` before implementation.
-The complete design package is included under `PROTECTED_PATHS` for coding;
-only the design workflow may change semantic design files and only the status
-writer may change its ledger.
-`COMMAND_ARTIFACTS` is copied exactly from the reviewed plan before execution.
-It may contain only bounded repository-relative paths outside protected paths and
-`docs/design/**`, and authorizes command residue rather than worker edits. No
-later report can expand it.
+A packet is runnable only when the design is reviewed and ready, every stable
+requirement reference resolves, and every semantic design content fingerprint
+matches the verifier-authored `REVIEWED_FINGERPRINTS` in `status.md`. Fingerprints
+may be computed with `git hash-object`, including for uncommitted files; they are
+document-version checks, not Git workspace snapshots.
+
+Coding workers never edit `docs/design/**`. Expected paths are informed starting
+points, not an exhaustive allowlist.
 
 ```text
 TASK_ID: <stable short id>
@@ -28,9 +23,9 @@ DESIGN_REFS:
 - <docs/design path>::<stable requirement id>
 
 DESIGN_FINGERPRINTS:
-- docs/design/<design-id>/index.md: <git hash-object blob id>
-- docs/design/<design-id>/implementation-plan.md: <git hash-object blob id>
-- <referenced high-level or module design path>: <git hash-object blob id>
+- docs/design/<design-id>/index.md: <content fingerprint>
+- docs/design/<design-id>/implementation-plan.md: <content fingerprint>
+- <referenced high-level or module design path>: <content fingerprint>
 
 GOAL:
 <one observable outcome>
@@ -39,10 +34,7 @@ ACCEPTANCE_CRITERIA:
 - <behavior that can be checked>
 
 EXPECTED_PATHS:
-- <path>
-
-PROTECTED_PATHS:
-- <human-owned baseline path or complete design package path that must not change>
+- <informed starting path>
 
 ENTRY_SYMBOLS:
 - <verified symbol or starting file>
@@ -53,9 +45,6 @@ DEPENDS_ON:
 ACCEPTANCE_COMMANDS:
 - <exact bounded command>
 
-COMMAND_ARTIFACTS:
-- <exact repository-relative artifact path or bounded directory root, or none>
-
 CONSTRAINTS:
 - <public behavior or boundary that must remain unchanged>
 
@@ -65,3 +54,8 @@ KNOWN_FACTS:
 KNOWN_FAILED_APPROACHES:
 - <short fingerprint only, or none>
 ```
+
+The worker stops when the outcome must materially broaden or the approved design
+cannot support the implementation. The harness does not attach a workspace
+inventory or protected-path manifest and does not claim exhaustive edit
+attribution.
