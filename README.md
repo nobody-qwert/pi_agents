@@ -70,6 +70,20 @@ flowchart TB
     FV -->|code FAIL| RC[One bounded recovery call]
     FV -->|design, status, protected, or environment failure| BL
     RC --> D
+
+    classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
+    classDef supervisor fill:#7c3aed,color:#ffffff,stroke:#4c1d95,stroke-width:2px
+    classDef decision fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
+    classDef handoff fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
+    classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
+    classDef blocker fill:#fee2e2,color:#7f1d1d,stroke:#dc2626,stroke-width:2px
+
+    class O,I,DA,DV,SWR,C,V,D,C2,V2,RV,SWT,SWC agent
+    class DS,IS,FV,F supervisor
+    class S,R,N decision
+    class B,DP,P,RC handoff
+    class DO,OUT outcome
+    class BL blocker
 ```
 
 All specialists run sequentially, in the foreground, with fresh context. The
