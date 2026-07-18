@@ -23,50 +23,43 @@ contains only its project instructions and role definitions.
 
 ```mermaid
 graph TB
-    U["User request"] --> B["Supervisor records Git baseline<br/>and protects pre-existing changes"]
-    B --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
+    U["User request"] --> S["Supervisor<br/>/supervise prompt"]
+    S --> B(["Record Git baseline<br/>and protect existing changes"])
+    B --> I["Investigator<br/>.pi/agents/investigator.md"]
+    I --> IR(["Status, evidence, and<br/>ready task packets"])
 
-    S --> I["Investigator<br/>.pi/agents/investigator.md"]
-    I --> IR(["STATUS plus evidence<br/>and task packets when READY"])
-    IR --> S
-
-    S -->|NEEDS_DESIGN| DC(["Design capsule<br/>question, invariants, evidence, risks"])
+    IR -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
+    IR -->|NEEDS_DESIGN| DC(["Design capsule<br/>question, invariants, evidence, risks"])
     DC --> DW["Design worker<br/>.pi/agents/design-worker.md"]
-    DW --> DR(["Design decision<br/>and task packets"])
-    DR --> S
+    DW -->|READY| P
 
-    S -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
     P --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
-    CW --> WR(["Worker report<br/>COMPLETED, STUCK, or blocker"])
-
-    WR -->|COMPLETED| V["Supervisor verifies claim<br/>paths, hunks, acceptance commands"]
+    CW --> WR(["Worker report"])
+    WR -->|COMPLETED| V(["Verify changed paths,<br/>hunks, and acceptance commands"])
     V --> Q{Verification passes?}
-    Q -->|Yes| RQ{Large, risky,<br/>public-interface, or cross-responsibility?}
+    Q -->|Yes| RQ{Review needed?}
+    RQ -->|No| NP(["Next dependent packet<br/>or all packets verified"])
     RQ -->|Yes| RV["Reviewer<br/>.pi/agents/reviewer.md"]
     RV --> RVR(["Review verdict"])
-    RQ -->|No| NP(["Next dependent packet<br/>or all packets verified"])
-    NP --> S
+    RVR -->|ACCEPT| NP
 
-    WR -->|STUCK| FC(["Compact failure capsule<br/>no transcript"])
+    WR -->|STUCK| FC(["Compact failure capsule"])
     Q -->|No| FC
     FC --> D["Debugger<br/>.pi/agents/debugger.md"]
-    D --> DG(["Root cause and<br/>one revised experiment"])
-    DG -->|DIAGNOSED| RP(["Revised task packet<br/>new evidence only"])
-    RP --> RCW["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
-    RCW --> RR(["Replacement report"])
-    RR -->|COMPLETED| V
+    D -->|DIAGNOSED: revised experiment| RP(["Revised task packet<br/>new evidence only"])
+    RP -->|One replacement attempt| CW
 
-    S -->|ALREADY_SATISFIED| AS(["Bounded independent check"])
-    AS --> O["Result returned to user"]
+    IR -->|ALREADY_SATISFIED| AS(["Bounded independent check"])
+    AS --> O["Verified result returned to user"]
+    NP -->|More packets| P
+    NP -->|All verified| O
 
-    S -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
+    IR -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
+    DW -->|NEEDS_USER_DECISION<br/>ENVIRONMENT_BLOCKED| BL
     WR -->|BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
-    DG -->|NEEDS_MORE_EVIDENCE<br/>ENVIRONMENT_BLOCKED| BL
-    RR -->|STUCK or blocker| BL
-    RVR -->|ACCEPT| NP
+    D -->|NEEDS_MORE_EVIDENCE<br/>ENVIRONMENT_BLOCKED| BL
     RVR -->|REJECT<br/>NEEDS_EVIDENCE| BL
-
-    S -->|All packets verified| O
+    FC -->|No revised experiment| BL
 
     classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
     classDef supervisor fill:#111827,color:#ffffff,stroke:#374151,stroke-width:2px
@@ -76,9 +69,9 @@ graph TB
     classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
     classDef blocker fill:#fee2e2,color:#7f1d1d,stroke:#dc2626,stroke-width:2px
 
-    class I,DW,CW,D,RV,RCW agent
-    class S,B,V supervisor
-    class IR,DC,DR,P,WR,NP,FC,DG,RP,RR,AS,RVR handoff
+    class I,DW,CW,D,RV agent
+    class S supervisor
+    class B,IR,DC,P,WR,V,NP,FC,RP,AS,RVR handoff
     class Q,RQ decision
     class U input
     class O outcome
