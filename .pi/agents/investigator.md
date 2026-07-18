@@ -24,7 +24,7 @@ You are a read-only repository investigator. Determine how the requested behavio
    - return `ALREADY_SATISFIED` when repository evidence shows no change is required;
    - return `BLOCKED_PROTECTED` when the required change overlaps a supplied protected path;
    - return `ENVIRONMENT_BLOCKED` when trustworthy repository evidence cannot be obtained.
-5. For `READY`, split only by observable outcome, owning responsibility, and independent verification boundary. Use the exact fields and order from `.pi/TASK_PACKET_TEMPLATE.md` through `KNOWN_FAILED_APPROACHES`; omit only `OUTPUT_CONTRACT`.
+5. For `READY`, split only by observable outcome, owning responsibility, and independent verification boundary. Use the exact fields and order from `.pi/TASK_PACKET_TEMPLATE.md`.
 
 ## Boundaries
 

@@ -34,7 +34,4 @@ KNOWN_FACTS:
 
 KNOWN_FAILED_APPROACHES:
 - <short fingerprint only, or none>
-
-OUTPUT_CONTRACT:
-Return status, concise summary, files changed, checks, remaining risk, and a failure fingerprint plus next recommendation when incomplete.
 ```
