@@ -29,7 +29,7 @@ graph TB
     I --> IR(["Status, evidence, and<br/>ready task packets"])
 
     IR -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
-    IR -->|NEEDS_DESIGN| DC(["Design capsule<br/>question, invariants, evidence, risks"])
+    IR -->|NEEDS_DESIGN| DC(["Design brief<br/>question, invariants, evidence, risks"])
     DC --> DW["Design worker<br/>.pi/agents/design-worker.md"]
     DW -->|READY| P
 
