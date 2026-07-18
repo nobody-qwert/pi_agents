@@ -33,7 +33,9 @@ graph TB
     DC --> DW["Design worker<br/>.pi/agents/design-worker.md"]
     DW -->|READY| P
 
-    P --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
+    P --> PV{Packet valid and<br/>protected paths clear?}
+    PV -->|Yes| CW["Coding worker<br/>.pi/agents/coding-worker.md"]
+    PV -->|No| BL["Concrete blocker<br/>reported to user"]
     CW --> WR(["Worker report"])
     WR -->|COMPLETED| V(["Verify changed paths,<br/>hunks, and acceptance commands"])
     V --> Q{Verification passes?}
@@ -44,14 +46,25 @@ graph TB
     RVR -->|ACCEPT| NP
 
     WR -->|STUCK| FC(["Compact failure capsule"])
-    Q -->|No| FC
+    Q -->|No| FI(["Inspect and normalize<br/>verification failure"])
+    FI -->|Same normalized failure remains| FC
+    FI -->|New or first failure| BL
     FC --> D["Debugger<br/>.pi/agents/debugger.md"]
-    D -->|DIAGNOSED: revised experiment| RP(["Revised task packet<br/>new evidence only"])
-    RP -->|One replacement attempt| CW
+    D --> DE{New evidence and<br/>revised experiment?}
+    DE -->|Yes| RP(["Revised task packet<br/>new evidence only"])
+    DE -->|No| BL
+    RP --> CW2["Replacement coding worker<br/>one attempt only"]
+    CW2 --> WR2(["Replacement report"])
+    WR2 -->|COMPLETED| V2(["Verify changed paths,<br/>hunks, and acceptance commands"])
+    V2 --> Q2{Verification passes?}
+    Q2 -->|Yes| RQ
+    Q2 -->|No| BL
+    WR2 -->|STUCK<br/>BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
 
     IR -->|ALREADY_SATISFIED| AS(["Bounded independent check"])
     AS --> O["Verified result returned to user"]
-    NP -->|More packets| P
+    NP -->|More packets| CP(["Compact checkpoint or<br/>fresh supervisor handoff"])
+    CP --> P
     NP -->|All verified| O
 
     IR -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
@@ -59,7 +72,6 @@ graph TB
     WR -->|BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
     D -->|NEEDS_MORE_EVIDENCE<br/>ENVIRONMENT_BLOCKED| BL
     RVR -->|REJECT<br/>NEEDS_EVIDENCE| BL
-    FC -->|No revised experiment| BL
 
     classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
     classDef supervisor fill:#111827,color:#ffffff,stroke:#374151,stroke-width:2px
@@ -71,8 +83,8 @@ graph TB
 
     class I,DW,CW,D,RV agent
     class S supervisor
-    class B,IR,DC,P,WR,V,NP,FC,RP,AS,RVR handoff
-    class Q,RQ decision
+    class B,IR,DC,P,WR,V,NP,CP,FC,RP,AS,RVR,WR2,V2,FI handoff
+    class PV,Q,RQ,DE,Q2 decision
     class U input
     class O outcome
     class BL blocker
