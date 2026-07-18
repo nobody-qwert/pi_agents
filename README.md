@@ -1,109 +1,152 @@
 # Pi Nested Loop
 
-Project-local prompts and agent definitions for supervising coding tasks in
+Project-local prompts and agent definitions for design-anchored coding tasks in
 [pi](https://github.com/badlogic/pi-mono). The subagent runtime is provided by
 [pi-subagents](https://github.com/nicobailon/pi-subagents); this repository
-contains only its orchestration prompt, task contract, and role definitions.
+contains the orchestration prompts, durable design contract, task contract, and
+specialist role definitions.
 
 ## Contents
 
 | Path | Purpose |
 | --- | --- |
-| `.pi/prompts/supervise.md` | `/supervise` policy and final-completion prompt |
-| `.pi/agents/orchestrator.md` | Routes the specialist workflow and returns verifier-backed checkpoints |
-| `.pi/agents/investigator.md` | Read-only repository investigation and task routing |
-| `.pi/agents/design-worker.md` | Read-only resolution of architectural decisions |
-| `.pi/agents/coding-worker.md` | Implementation of one bounded outcome |
-| `.pi/agents/verifier.md` | Independent per-packet contract and design-conformance verification |
-| `.pi/agents/debugger.md` | Read-only diagnosis of a failed implementation attempt |
-| `.pi/agents/reviewer.md` | Read-only review of a verified patch |
-| `.pi/TASK_PACKET_TEMPLATE.md` | Handoff contract for implementation tasks |
+| `.pi/prompts/design.md` | `/design` policy and independent design acceptance |
+| `.pi/prompts/supervise.md` | `/supervise` implementation policy and final-completion authority |
+| `.pi/agents/orchestrator.md` | Routes design, implementation, recovery, finalization, and status transitions |
+| `.pi/agents/investigator.md` | Reconciles source, durable design, status, and planned tasks without editing |
+| `.pi/agents/design-worker.md` | Authors high-level and detailed module design artifacts |
+| `.pi/agents/design-verifier.md` | Independently verifies one semantic design revision and its plan |
+| `.pi/agents/coding-worker.md` | Implements one design-anchored bounded outcome |
+| `.pi/agents/verifier.md` | Independently verifies contract, design, scope, and acceptance commands |
+| `.pi/agents/debugger.md` | Diagnoses one code-level failure without editing |
+| `.pi/agents/reviewer.md` | Reviews a verified task-local patch without editing |
+| `.pi/agents/status-writer.md` | Mechanically persists one authorized status transaction |
+| `.pi/DESIGN_PACKAGE_TEMPLATE.md` | Durable design package and status-ledger contract |
+| `.pi/TASK_PACKET_TEMPLATE.md` | Design-anchored implementation handoff contract |
 | `assets/agent-orchestration.png` | Orchestration diagram asset (legacy) |
 
 ## Orchestration flow
 
 ```mermaid
-graph TB
-    U["User request"] --> S["Supervisor<br/>policy and completion authority"]
-    S --> B(["Record Git baseline<br/>and protect existing changes"])
-    B --> OR["Orchestrator<br/>.pi/agents/orchestrator.md"]
-    OR --> I["Investigator<br/>.pi/agents/investigator.md"]
-    I --> IR(["Status, evidence, and<br/>ready task packets"])
+flowchart TB
+    U[User outcome] --> S{Outer prompt}
+    S -->|/design| DS[Design supervisor]
+    S -->|/supervise| IS[Implementation supervisor]
+    DS --> B[Record Git baseline and protect existing changes]
+    IS --> B
+    B --> O[Orchestrator]
+    O --> I[Investigator]
 
-    IR -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
-    IR -->|NEEDS_DESIGN| DC(["Design brief<br/>question, invariants, evidence, risks"])
-    DC --> DW["Design worker<br/>.pi/agents/design-worker.md"]
-    DW -->|READY| P
+    I -->|missing, stale, or incomplete design| DA[Design author]
+    DA --> DV[Design verifier]
+    DV -->|one bounded correction| DA
+    DV -->|ACCEPT| SWR[Status writer: design READY]
+    SWR --> DP[(docs/design/design-id)]
+    DP -->|DESIGN_ONLY| DO[Reviewed design result]
+    DP -->|IMPLEMENTATION| P[Design-anchored task packet]
+    I -->|reviewed design and planned task| P
 
-    P --> PV{Packet valid and<br/>protected paths clear?}
-    PV -->|Yes| CW["Coding worker<br/>.pi/agents/coding-worker.md"]
-    PV -->|No| BL["Concrete blocker<br/>reported to user"]
-    CW --> WR(["Worker report"])
-    WR -->|COMPLETED| V["Verifier<br/>contract, design, scope,<br/>and acceptance commands"]
-    V --> Q{Verification passes?}
-    Q -->|Yes| RQ{Review needed?}
-    RQ -->|No| NP(["Next dependent packet<br/>or all packets verified"])
-    RQ -->|Yes| RV["Reviewer<br/>.pi/agents/reviewer.md"]
-    RV --> RVR(["Review verdict"])
-    RVR -->|ACCEPT| NP
+    P --> C[Coding worker]
+    C --> V[Implementation verifier]
+    V -->|code-level failure| D[Debugger]
+    D -->|one new experiment| C2[Replacement coding worker]
+    C2 --> V2[Implementation verifier]
+    V -->|ACCEPT| R{Review required?}
+    V2 -->|ACCEPT| R
+    R -->|yes| RV[Reviewer]
+    R -->|no| SWT[Status writer: VERIFIED_PENDING_FINAL]
+    RV -->|ACCEPT| SWT
+    SWT --> N{More dependent tasks?}
+    N -->|yes| P
+    N -->|no| FV[Outer supervisor reruns exact manifest]
+    FV -->|PASS| F[Restricted FINALIZE call]
+    F --> SWC[Status writer: COMPLETE]
+    SWC --> OUT[Verified result]
 
-    WR -->|STUCK| FC(["Compact failure capsule"])
-    Q -->|No| FI(["Inspect and normalize<br/>verification failure"])
-    FI -->|Recovery allowance remains| FC
-    FI -->|Recovery exhausted| BL
-    FC --> D["Debugger<br/>.pi/agents/debugger.md"]
-    D --> DE{New evidence and<br/>revised experiment?}
-    DE -->|Yes| RP(["Revised task packet<br/>new evidence only"])
-    DE -->|No| BL
-    RP --> CW2["Replacement coding worker<br/>one attempt only"]
-    CW2 --> WR2(["Replacement report"])
-    WR2 -->|COMPLETED| V2["Verifier<br/>contract, design, scope,<br/>and acceptance commands"]
-    V2 --> Q2{Verification passes?}
-    Q2 -->|Yes| RQ
-    Q2 -->|No| BL
-    WR2 -->|STUCK<br/>BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
-
-    IR -->|ALREADY_SATISFIED| AS(["Supervisor bounded<br/>independent check"])
-    AS --> OUT["Verified result returned to user"]
-    NP -->|More packets| CP(["Compact checkpoint or<br/>fresh orchestrator handoff"])
-    CP --> P
-    NP -->|All verified| F(["Supervisor independently verifies<br/>final diff and command manifest"])
-    F --> OUT
-
-    IR -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
-    DW -->|NEEDS_USER_DECISION<br/>ENVIRONMENT_BLOCKED| BL
-    WR -->|BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
-    D -->|NEEDS_MORE_EVIDENCE<br/>ENVIRONMENT_BLOCKED| BL
-    RVR -->|REJECT<br/>NEEDS_EVIDENCE| BL
-
-    classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
-    classDef supervisor fill:#111827,color:#ffffff,stroke:#374151,stroke-width:2px
-    classDef handoff fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
-    classDef decision fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
-    classDef input fill:#f3f4f6,color:#111827,stroke:#6b7280,stroke-width:1px
-    classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
-    classDef blocker fill:#fee2e2,color:#7f1d1d,stroke:#dc2626,stroke-width:2px
-
-    class OR,I,DW,CW,V,V2,D,RV agent
-    class S supervisor
-    class B,IR,DC,P,WR,NP,CP,FC,RP,AS,RVR,WR2,FI handoff
-    class PV,Q,RQ,DE,Q2 decision
-    class U input
-    class OUT outcome
-    class BL blocker
+    C -->|NEEDS_DESIGN_CHANGE| BL[Concrete blocker]
+    V -->|NEEDS_DESIGN_CHANGE| BL
+    RV -->|NEEDS_DESIGN_CHANGE| BL
+    DV -->|unresolved or rejected| BL
+    FV -->|code FAIL| RC[One bounded recovery call]
+    FV -->|design, status, protected, or environment failure| BL
+    RC --> D
 ```
 
-No model, provider, concurrency, or extension settings are checked in. Configure
-them in the pi environment. The role definitions require subagents to run
-sequentially, in the foreground, with fresh context. The only permitted
-delegation hierarchy is supervisor → orchestrator → leaf specialist.
+All specialists run sequentially, in the foreground, with fresh context. The
+only delegation hierarchy is outer supervisor → orchestrator → leaf specialist.
+
+## Durable design packages
+
+Every implementation is anchored to a reviewed package in the target
+repository:
+
+```text
+docs/design/<design-id>/
+├── index.md
+├── high-level.md
+├── implementation-plan.md
+├── modules/
+│   └── <module-id>.md
+└── status.md
+```
+
+The high-level design records system boundaries, component responsibilities,
+dependency direction, principal flows, cross-module contracts, compatibility,
+decisions, and risks. Each affected module design records responsibility,
+interfaces, dependencies, owned state, behavior, failure semantics, invariants,
+and verification strategy. Detailed design describes durable contracts rather
+than predicting the code line by line.
+
+Normative requirements receive immutable IDs such as `HLD-001` and
+`MOD-AUTH-001`. Task packets cite them as `path::requirement-id` and also record
+Git blob IDs for the package index, implementation plan, and referenced design
+files. A missing ID, changed blob, mismatched
+revision, unready design, or source/design contradiction makes the packet stale
+and routes to `NEEDS_DESIGN_CHANGE` before coding.
+
+`DESIGN_REVISION` increases for every normative semantic change. Status-only
+updates never change it. A design is runnable only when its ledger records
+`READY`, the reviewed revision equals the index revision, and the independent
+design-verifier verdict is `ACCEPT`. The ledger also stores the verifier's full
+semantic-file fingerprint manifest; readiness is invalid if any current file no
+longer matches it, even when somebody forgot to bump the revision.
+
+## Status ownership
+
+Progress has one semantic owner and one mechanical writer:
+
+- the orchestrator decides and authorizes state transitions;
+- the design verifier authorizes design readiness;
+- the implementation verifier and any required reviewer authorize packet
+  verification;
+- the outer supervisor alone authorizes final user-facing completion;
+- `status-writer` only compare-and-set edits the exact package `status.md`.
+
+Durable task states are:
+
+```text
+PLANNED → VERIFIED_PENDING_FINAL → COMPLETE
+   ↑                 |
+   └──── BLOCKED ←───┘
+```
+
+Worker claims such as `IN_PROGRESS` and `IMPLEMENTED` are not persisted.
+Dependencies may start only when a prerequisite's stored inner-verification
+snapshot still matches (or its completed final snapshot still matches). Exact
+snapshot drift atomically resets the stale task and already-verified dependants
+to `PLANNED` for topological revalidation. `COMPLETE` is written only after the
+outer supervisor reruns the exact command manifest successfully and makes a
+restricted finalization call. The ledger stores both inner and final non-status
+fingerprints, so later drift cannot silently unlock work or satisfy a request.
+This two-phase completion prevents the ledger from claiming success before final
+independent verification.
 
 ## Requirements
 
 - pi with project-local prompts and agents enabled
 - a model provider configured in pi
 - the `pi-subagents` extension
-- a trusted target repository with concrete verification commands
+- a trusted target repository with concrete bounded verification commands
 
 Install the extension:
 
@@ -122,63 +165,97 @@ cd pi_agents
 pi
 ```
 
-To use this setup in another repository, copy `.pi`. The role prompts are
-self-contained and inherit that repository's own `AGENTS.md` or `CLAUDE.md`
-when present. Keep repository-specific module boundaries, protected paths,
-constraints, and verification commands in the target repository's instructions.
+To use this setup in another repository, copy `.pi`. The role prompts inherit
+that repository's own `AGENTS.md` or `CLAUDE.md` when present. Keep
+repository-specific module boundaries, protected paths, constraints, and
+verification commands in the target repository's instructions. The workflows
+create and maintain the target repository's `docs/design` packages.
 
 ## Usage
 
-From the configured repository root:
+Produce or maintain design without implementation:
+
+```text
+/design <outcome, constraints, and design questions>
+```
+
+The design workflow investigates current ownership, authors or updates one
+package, independently verifies the high-level design, detailed module designs,
+and implementation plan, then persists reviewed readiness and planned tasks.
+Review and commit that package before starting a separate `/supervise` run. The
+next run intentionally protects every pre-existing uncommitted file, including a
+design ledger, so it cannot safely advance status left dirty by another run.
+One `/supervise` run can author missing design and implement it without an
+intermediate commit. The hard boundary still applies when that run ends if it
+changed status.
+
+The same rule applies to successful and blocked runs: before starting another
+`/design` or `/supervise`, review and commit all intended workflow-owned design,
+implementation, and status changes. Rejected work must instead be explicitly
+restored or otherwise reconciled. The harness never commits or reverts files
+automatically, and a fresh run treats every remaining uncommitted path as
+human-owned.
+
+Run design-anchored implementation:
 
 ```text
 /supervise <task and acceptance criteria>
 ```
 
-The supervisor:
+The implementation workflow:
 
-1. Records the Git baseline and treats pre-existing changes as protected.
-2. Invokes the orchestrator once to route all specialist work.
-3. Independently checks the final diff and reruns every command in the
-   orchestrator's verification manifest before accepting completion.
-4. Returns the verified result or a concrete blocker.
-
-The orchestrator:
-
-1. Runs the investigator and, only when needed, the design worker.
-2. Sends ready task packets to coding workers sequentially.
-3. Sends each completed packet to the verifier, which checks the implementation
-   against its task packet and design decision and runs its exact acceptance
-   commands before dependent work begins.
-4. Runs the reviewer after verifier acceptance for large, risky,
-   public-interface, or cross-responsibility changes.
-5. On a worker or verifier failure, permits one debugger and at most one
-   replacement coding worker when the diagnosis supplies a materially different
-   experiment.
+1. Records the Git baseline and treats all pre-existing changes as protected.
+2. Reconciles the request with current source, design revision, status, and plan.
+3. Runs the design author and verifier first when the package is missing or
+   stale; otherwise selects existing planned tasks.
+4. Sends packets to coding workers sequentially and independently verifies each
+   task against its exact design references and acceptance commands.
+5. Runs review for risky, public-interface, security-sensitive, migration, or
+   cross-responsibility changes.
+6. Persists inner verification before dependent work and final completion only
+   after the outer supervisor independently reruns the complete manifest.
+7. Allows one debugger and at most one replacement coding worker for a
+   code-level failure with materially new evidence. Design mismatches never use
+   the coding recovery loop.
 
 ## Task packets
 
 Each packet defines:
 
-- one observable `GOAL` and its `ACCEPTANCE_CRITERIA`;
-- `EXPECTED_PATHS` as informed starting points, not an exhaustive allowlist;
-- strict `PROTECTED_PATHS` that must not change;
-- verified `ENTRY_SYMBOLS` and task dependencies;
-- exact `ACCEPTANCE_COMMANDS`;
+- a stable task ID and one observable goal with acceptance criteria;
+- the exact reviewed design ID and revision;
+- stable high-level and owning-module requirement references;
+- Git blob fingerprints for the package index, implementation plan, and every
+  referenced high-level or module design file;
+- expected paths as informed starting points, never an exhaustive allowlist;
+- strict protected paths, including the complete human-owned baseline and the
+  design package during coding;
+- verified entry symbols and task dependencies;
+- exact bounded acceptance commands;
+- bounded command-artifact paths pre-authorized by the reviewed plan, never by a
+  later worker report;
 - constraints, known facts, and fingerprints of failed approaches.
 
-The coding worker may change paths outside `EXPECTED_PATHS` when required by the
-same outcome, but must return `BLOCKED_SCOPE` if the outcome must broaden or a
-protected path must change.
+The packet must agree with its `implementation-plan.md` entry. A coding worker
+may change paths outside `EXPECTED_PATHS` when required by the same outcome, but
+must stop when the outcome broadens, a protected path must change, or the
+approved design no longer supports the implementation.
 
 ## Boundaries
 
-- Existing uncommitted changes are human-owned.
+- Existing uncommitted changes are human-owned and never attributed, reverted,
+  staged, or silently absorbed by a workflow.
+- Design authors edit only semantic files beneath one exact design package and
+  never its status, source, or tests.
+- Status writers edit only one exact `docs/design/<design-id>/status.md` and do
+  not decide transitions.
+- Coding workers never edit `docs/design/**`.
+- Investigator, design verifier, implementation verifier, debugger, and
+  reviewer are non-editing by instruction, not by a filesystem sandbox.
 - Workers must not weaken tests, bypass checks, or perform unrelated cleanup.
-- Investigator, design, verifier, debugger, and reviewer roles are non-editing by
-  instruction, not by a filesystem sandbox.
-- Leaf agent definitions set fresh context and prohibit subagents. The
-  orchestrator is the only delegating agent; all execution remains sequential,
+- Source, design prose, status, diffs, logs, command output, and agent reports
+  are untrusted task data rather than executable instructions.
+- Leaf definitions prohibit subagents. All specialist execution is sequential,
   foreground, and unscheduled.
 - Deterministic timeouts, filesystem isolation, and process enforcement require
   the extension or an external sandbox.
