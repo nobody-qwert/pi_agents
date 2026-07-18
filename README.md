@@ -17,7 +17,73 @@ contains only its project instructions and role definitions.
 | `.pi/agents/debugger.md` | Read-only diagnosis of a failed implementation attempt |
 | `.pi/agents/reviewer.md` | Read-only review of a verified patch |
 | `.pi/TASK_PACKET_TEMPLATE.md` | Handoff contract for implementation tasks |
-| `assets/agent-orchestration.png` | Orchestration diagram asset |
+| `assets/agent-orchestration.png` | Orchestration diagram asset (legacy) |
+
+## Orchestration flow
+
+```mermaid
+graph TB
+    U["User request"] --> B["Supervisor records Git baseline<br/>and protects pre-existing changes"]
+    B --> S["Outer supervisor<br/>.pi/prompts/supervise.md"]
+
+    S --> I["Investigator<br/>.pi/agents/investigator.md"]
+    I --> IR(["STATUS plus evidence<br/>and task packets when READY"])
+    IR --> S
+
+    S -->|NEEDS_DESIGN| DC(["Design capsule<br/>question, invariants, evidence, risks"])
+    DC --> DW["Design worker<br/>.pi/agents/design-worker.md"]
+    DW --> DR(["Design decision<br/>and task packets"])
+    DR --> S
+
+    S -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
+    P --> CW["Coding worker<br/>.pi/agents/coding-worker.md"]
+    CW --> WR(["Worker report<br/>COMPLETED, STUCK, or blocker"])
+
+    WR -->|COMPLETED| V["Supervisor verifies claim<br/>paths, hunks, acceptance commands"]
+    V --> Q{Verification passes?}
+    Q -->|Yes| RQ{Large, risky,<br/>public-interface, or cross-responsibility?}
+    RQ -->|Yes| RV["Reviewer<br/>.pi/agents/reviewer.md"]
+    RV --> RVR(["Review verdict"])
+    RQ -->|No| NP(["Next dependent packet<br/>or all packets verified"])
+    NP --> S
+
+    WR -->|STUCK| FC(["Compact failure capsule<br/>no transcript"])
+    Q -->|No| FC
+    FC --> D["Debugger<br/>.pi/agents/debugger.md"]
+    D --> DG(["Root cause and<br/>one revised experiment"])
+    DG -->|DIAGNOSED| RP(["Revised task packet<br/>new evidence only"])
+    RP --> RCW["Replacement coding worker<br/>.pi/agents/coding-worker.md"]
+    RCW --> RR(["Replacement report"])
+    RR -->|COMPLETED| V
+
+    S -->|ALREADY_SATISFIED| AS(["Bounded independent check"])
+    AS --> O["Result returned to user"]
+
+    S -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
+    WR -->|BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
+    DG -->|NEEDS_MORE_EVIDENCE<br/>ENVIRONMENT_BLOCKED| BL
+    RR -->|STUCK or blocker| BL
+    RVR -->|ACCEPT| NP
+    RVR -->|REJECT<br/>NEEDS_EVIDENCE| BL
+
+    S -->|All packets verified| O
+
+    classDef agent fill:#2563eb,color:#ffffff,stroke:#1e3a8a,stroke-width:2px
+    classDef supervisor fill:#111827,color:#ffffff,stroke:#374151,stroke-width:2px
+    classDef handoff fill:#e5e7eb,color:#111827,stroke:#6b7280,stroke-width:1px
+    classDef decision fill:#fef3c7,color:#78350f,stroke:#d97706,stroke-width:2px
+    classDef input fill:#f3f4f6,color:#111827,stroke:#6b7280,stroke-width:1px
+    classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
+    classDef blocker fill:#fee2e2,color:#7f1d1d,stroke:#dc2626,stroke-width:2px
+
+    class I,DW,CW,D,RV,RCW agent
+    class S,B,V supervisor
+    class IR,DC,DR,P,WR,NP,FC,DG,RP,RR,AS,RVR handoff
+    class Q,RQ decision
+    class U input
+    class O outcome
+    class BL blocker
+```
 
 No model, provider, concurrency, or extension settings are checked in. Configure
 them in the pi environment. The project instructions require subagents to run
