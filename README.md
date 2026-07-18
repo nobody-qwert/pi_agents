@@ -3,17 +3,18 @@
 Project-local prompts and agent definitions for supervising coding tasks in
 [pi](https://github.com/badlogic/pi-mono). The subagent runtime is provided by
 [pi-subagents](https://github.com/nicobailon/pi-subagents); this repository
-contains only its project instructions and role definitions.
+contains only its orchestration prompt, task contract, and role definitions.
 
 ## Contents
 
 | Path | Purpose |
 | --- | --- |
-| `AGENTS.md` | Shared repository, scope, verification, and execution rules |
-| `.pi/prompts/supervise.md` | `/supervise` orchestration prompt |
+| `.pi/prompts/supervise.md` | `/supervise` policy and final-completion prompt |
+| `.pi/agents/orchestrator.md` | Routes the specialist workflow and returns verifier-backed checkpoints |
 | `.pi/agents/investigator.md` | Read-only repository investigation and task routing |
 | `.pi/agents/design-worker.md` | Read-only resolution of architectural decisions |
 | `.pi/agents/coding-worker.md` | Implementation of one bounded outcome |
+| `.pi/agents/verifier.md` | Independent per-packet contract and design-conformance verification |
 | `.pi/agents/debugger.md` | Read-only diagnosis of a failed implementation attempt |
 | `.pi/agents/reviewer.md` | Read-only review of a verified patch |
 | `.pi/TASK_PACKET_TEMPLATE.md` | Handoff contract for implementation tasks |
@@ -23,9 +24,10 @@ contains only its project instructions and role definitions.
 
 ```mermaid
 graph TB
-    U["User request"] --> S["Supervisor<br/>/supervise prompt"]
+    U["User request"] --> S["Supervisor<br/>policy and completion authority"]
     S --> B(["Record Git baseline<br/>and protect existing changes"])
-    B --> I["Investigator<br/>.pi/agents/investigator.md"]
+    B --> OR["Orchestrator<br/>.pi/agents/orchestrator.md"]
+    OR --> I["Investigator<br/>.pi/agents/investigator.md"]
     I --> IR(["Status, evidence, and<br/>ready task packets"])
 
     IR -->|READY| P(["Canonical task packet<br/>.pi/TASK_PACKET_TEMPLATE.md"])
@@ -37,7 +39,7 @@ graph TB
     PV -->|Yes| CW["Coding worker<br/>.pi/agents/coding-worker.md"]
     PV -->|No| BL["Concrete blocker<br/>reported to user"]
     CW --> WR(["Worker report"])
-    WR -->|COMPLETED| V(["Verify changed paths,<br/>hunks, and acceptance commands"])
+    WR -->|COMPLETED| V["Verifier<br/>contract, design, scope,<br/>and acceptance commands"]
     V --> Q{Verification passes?}
     Q -->|Yes| RQ{Review needed?}
     RQ -->|No| NP(["Next dependent packet<br/>or all packets verified"])
@@ -47,25 +49,26 @@ graph TB
 
     WR -->|STUCK| FC(["Compact failure capsule"])
     Q -->|No| FI(["Inspect and normalize<br/>verification failure"])
-    FI -->|Same normalized failure remains| FC
-    FI -->|New or first failure| BL
+    FI -->|Recovery allowance remains| FC
+    FI -->|Recovery exhausted| BL
     FC --> D["Debugger<br/>.pi/agents/debugger.md"]
     D --> DE{New evidence and<br/>revised experiment?}
     DE -->|Yes| RP(["Revised task packet<br/>new evidence only"])
     DE -->|No| BL
     RP --> CW2["Replacement coding worker<br/>one attempt only"]
     CW2 --> WR2(["Replacement report"])
-    WR2 -->|COMPLETED| V2(["Verify changed paths,<br/>hunks, and acceptance commands"])
+    WR2 -->|COMPLETED| V2["Verifier<br/>contract, design, scope,<br/>and acceptance commands"]
     V2 --> Q2{Verification passes?}
     Q2 -->|Yes| RQ
     Q2 -->|No| BL
     WR2 -->|STUCK<br/>BLOCKED_SCOPE<br/>ENVIRONMENT_BLOCKED| BL
 
-    IR -->|ALREADY_SATISFIED| AS(["Bounded independent check"])
-    AS --> O["Verified result returned to user"]
-    NP -->|More packets| CP(["Compact checkpoint or<br/>fresh supervisor handoff"])
+    IR -->|ALREADY_SATISFIED| AS(["Supervisor bounded<br/>independent check"])
+    AS --> OUT["Verified result returned to user"]
+    NP -->|More packets| CP(["Compact checkpoint or<br/>fresh orchestrator handoff"])
     CP --> P
-    NP -->|All verified| O
+    NP -->|All verified| F(["Supervisor independently verifies<br/>final diff and command manifest"])
+    F --> OUT
 
     IR -->|NEEDS_USER_DECISION<br/>BLOCKED_PROTECTED<br/>ENVIRONMENT_BLOCKED| BL["Concrete blocker<br/>reported to user"]
     DW -->|NEEDS_USER_DECISION<br/>ENVIRONMENT_BLOCKED| BL
@@ -81,19 +84,19 @@ graph TB
     classDef outcome fill:#dcfce7,color:#14532d,stroke:#16a34a,stroke-width:2px
     classDef blocker fill:#fee2e2,color:#7f1d1d,stroke:#dc2626,stroke-width:2px
 
-    class I,DW,CW,D,RV agent
+    class OR,I,DW,CW,V,V2,D,RV agent
     class S supervisor
-    class B,IR,DC,P,WR,V,NP,CP,FC,RP,AS,RVR,WR2,V2,FI handoff
+    class B,IR,DC,P,WR,NP,CP,FC,RP,AS,RVR,WR2,FI handoff
     class PV,Q,RQ,DE,Q2 decision
     class U input
-    class O outcome
+    class OUT outcome
     class BL blocker
 ```
 
 No model, provider, concurrency, or extension settings are checked in. Configure
-them in the pi environment. The project instructions require subagents to run
-sequentially, in the foreground, with fresh context, and without nested
-subagents.
+them in the pi environment. The role definitions require subagents to run
+sequentially, in the foreground, with fresh context. The only permitted
+delegation hierarchy is supervisor → orchestrator → leaf specialist.
 
 ## Requirements
 
@@ -119,10 +122,10 @@ cd pi_agents
 pi
 ```
 
-To use this setup in another repository, copy `.pi`, then merge the relevant
-rules from `AGENTS.md` into that repository's existing instructions. Do not
-overwrite existing project instructions blindly. Update repository-specific
-module boundaries, protected paths, constraints, and verification commands.
+To use this setup in another repository, copy `.pi`. The role prompts are
+self-contained and inherit that repository's own `AGENTS.md` or `CLAUDE.md`
+when present. Keep repository-specific module boundaries, protected paths,
+constraints, and verification commands in the target repository's instructions.
 
 ## Usage
 
@@ -135,18 +138,23 @@ From the configured repository root:
 The supervisor:
 
 1. Records the Git baseline and treats pre-existing changes as protected.
-2. Runs the investigator to locate ownership, constraints, and verification
-   commands.
-3. Runs the design worker only when the investigator reports `NEEDS_DESIGN`.
-4. Sends ready task packets to the coding worker sequentially.
-5. Checks changed paths and hunks, then independently runs every packet's
-   acceptance commands.
-6. Runs the reviewer after verification for large, risky, public-interface, or
-   cross-responsibility changes.
-7. On `STUCK` or a repeated verification failure, permits one debugger and at
-   most one replacement coding worker when the diagnosis provides a materially
-   different experiment.
-8. Returns the verified result or a concrete blocker.
+2. Invokes the orchestrator once to route all specialist work.
+3. Independently checks the final diff and reruns every command in the
+   orchestrator's verification manifest before accepting completion.
+4. Returns the verified result or a concrete blocker.
+
+The orchestrator:
+
+1. Runs the investigator and, only when needed, the design worker.
+2. Sends ready task packets to coding workers sequentially.
+3. Sends each completed packet to the verifier, which checks the implementation
+   against its task packet and design decision and runs its exact acceptance
+   commands before dependent work begins.
+4. Runs the reviewer after verifier acceptance for large, risky,
+   public-interface, or cross-responsibility changes.
+5. On a worker or verifier failure, permits one debugger and at most one
+   replacement coding worker when the diagnosis supplies a materially different
+   experiment.
 
 ## Task packets
 
@@ -167,10 +175,10 @@ protected path must change.
 
 - Existing uncommitted changes are human-owned.
 - Workers must not weaken tests, bypass checks, or perform unrelated cleanup.
-- Investigator, design, debugger, and reviewer roles are non-editing by
+- Investigator, design, verifier, debugger, and reviewer roles are non-editing by
   instruction, not by a filesystem sandbox.
-- Agent definitions set fresh context and prohibit nested subagents; the
-  supervisor also prohibits parallel, background, asynchronous, and scheduled
-  execution.
+- Leaf agent definitions set fresh context and prohibit subagents. The
+  orchestrator is the only delegating agent; all execution remains sequential,
+  foreground, and unscheduled.
 - Deterministic timeouts, filesystem isolation, and process enforcement require
   the extension or an external sandbox.
